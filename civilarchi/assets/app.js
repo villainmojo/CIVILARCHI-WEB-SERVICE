@@ -99,6 +99,7 @@
   const sumRowsEl = document.getElementById('sumRows');
   const sumKgEl = document.getElementById('sumKg');
   const sumTonEl = document.getElementById('sumTon');
+  const sumCopy = document.getElementById('sumCopy');
 
   function fmt(n, digits=3){
     if(n == null || !Number.isFinite(n)) return '-';
@@ -225,6 +226,44 @@
     recalcSum();
   }
 
+  function sumToTSV(){
+    const header = ['standard','shape','size','kg_per_m','length_m','total_kg','total_ton'];
+    const rows = [header.join('\t')];
+    for(const it of sumList){
+      const totalKg = it.kgm * it.length;
+      const totalTon = totalKg / 1000;
+      rows.push([
+        (STD_LABEL[it.stdKey] || it.stdKey),
+        (SHAPE_LABEL[it.shapeKey] || it.shapeKey),
+        it.name,
+        String(it.kgm),
+        String(it.length),
+        String(totalKg),
+        String(totalTon),
+      ].join('\t'));
+    }
+    // totals row
+    const sumKg = sumKgEl?.textContent || '';
+    const sumTon = sumTonEl?.textContent || '';
+    rows.push(['TOTAL','','','', '', sumKg, sumTon].join('\t'));
+    return rows.join('\n');
+  }
+
+  async function copySumToClipboard(){
+    if(sumList.length === 0){
+      setMsg('합산 목록이 비어있습니다.');
+      return;
+    }
+    const tsv = sumToTSV();
+    try{
+      await navigator.clipboard.writeText(tsv);
+      setMsg('합산 표를 클립보드에 복사했습니다. 엑셀에 붙여넣기(Ctrl+V) 하세요.');
+      setTimeout(()=>compute(), 1400);
+    }catch(e){
+      setMsg('복사에 실패했습니다(브라우저 권한).');
+    }
+  }
+
   function addToSum(){
     const L = Math.max(0, parseFloat(hbLength?.value || '0') || 0);
     const useCustom = !!hbUseCustom?.checked;
@@ -324,6 +363,7 @@
     hbCustomKgm.addEventListener('input', compute);
 
     hbAdd?.addEventListener('click', addToSum);
+    sumCopy?.addEventListener('click', copySumToClipboard);
 
     // Sum interactions (length edit / remove)
     sumRowsEl?.addEventListener('input', (e)=>{

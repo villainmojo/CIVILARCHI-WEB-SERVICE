@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0221" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0224" />
 </head>
 <body>
   <header class="top">
@@ -109,7 +109,7 @@
             </div>
           </div>
 
-          <div class="cards">
+          <div class="cards tool-cards">
             <article class="card">
               <h2>입력</h2>
               <div class="form">
@@ -175,38 +175,41 @@
                 <button class="btn" id="hbAdd">합산 추가</button>
                 <button class="btn primary" id="hbCopy">결과 복사</button>
               </div>
-
-              <div class="sum" style="margin-top:14px">
-                <div class="sum-head">
-                  <h3>합산</h3>
-                  <div class="sum-totals">
-                    <span class="badge ok"><span class="mono" id="sumKg">-</span>&nbsp;kg</span>
-                    <span class="badge"><span class="mono" id="sumTon">-</span>&nbsp;ton</span>
-                  </div>
-                </div>
-
-                <div class="sum-table-wrap">
-                  <table class="sum-table">
-                    <thead>
-                      <tr>
-                        <th>규격</th>
-                        <th>종류</th>
-                        <th>사이즈</th>
-                        <th class="right">kg/m</th>
-                        <th class="right">길이(m)</th>
-                        <th class="right">kg</th>
-                        <th class="right">ton</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody id="sumRows"></tbody>
-                  </table>
-                </div>
-
-                <div class="hint">합산 행의 길이를 수정하면 합계가 실시간으로 갱신됩니다.</div>
-              </div>
             </article>
           </div>
+
+          <section class="sum full" aria-label="합산" style="margin-top:14px">
+            <div class="sum-head">
+              <h3>합산</h3>
+              <div class="sum-actions">
+                <button class="mini-btn" id="sumCopy">엑셀로 복사</button>
+              </div>
+              <div class="sum-totals">
+                <span class="badge ok"><span class="mono" id="sumKg">-</span>&nbsp;kg</span>
+                <span class="badge"><span class="mono" id="sumTon">-</span>&nbsp;ton</span>
+              </div>
+            </div>
+
+            <div class="sum-table-wrap">
+              <table class="sum-table">
+                <thead>
+                  <tr>
+                    <th>규격</th>
+                    <th>종류</th>
+                    <th>사이즈</th>
+                    <th class="right">kg/m</th>
+                    <th class="right">길이(m)</th>
+                    <th class="right">kg</th>
+                    <th class="right">ton</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="sumRows"></tbody>
+              </table>
+            </div>
+
+            <div class="hint">합산 행의 길이를 수정하면 합계가 실시간으로 갱신됩니다. (엑셀로 복사는 표 형태로 붙여넣기 됩니다)</div>
+          </section>
         </section>
 
         <footer class="footer">
@@ -217,6 +220,6 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0221"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0224"></script>
 </body>
 </html>

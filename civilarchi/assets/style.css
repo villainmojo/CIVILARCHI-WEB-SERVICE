@@ -188,8 +188,10 @@ label.inline input{width:auto}
 
 /* Sum table */
 .sum{border:1px solid rgba(31,42,68,0.14); border-radius: var(--radius); background: rgba(255,255,255,0.65); padding:12px}
-.sum-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px}
+.sum.full{width:100%}
+.sum-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; flex-wrap:wrap}
 .sum-head h3{margin:0; font-size:14px; color: var(--navy)}
+.sum-actions{display:flex; gap:10px; align-items:center}
 .sum-totals{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 .sum-table-wrap{overflow:auto; border-radius: 12px; border:1px solid rgba(31,42,68,0.14); background:#fff}
 .sum-table{width:100%; border-collapse: collapse; min-width: 760px}
@@ -211,6 +213,12 @@ label.inline input{width:auto}
 @media (max-width: 980px){
   .app{grid-template-columns: 1fr}
   .sidebar{position:relative; top:auto}
+}
+
+/* tool cards layout (input/result) */
+.cards.tool-cards{grid-template-columns: repeat(2, minmax(0,1fr));}
+@media (max-width: 980px){
+  .cards.tool-cards{grid-template-columns: 1fr;}
 }
 @media (max-width: 780px){
   .cards{grid-template-columns:1fr}
