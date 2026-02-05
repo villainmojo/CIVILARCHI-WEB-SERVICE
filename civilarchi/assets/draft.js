@@ -72,6 +72,10 @@ const els = {
   exportIfc: () => document.getElementById('drExportIfc'),
   exportData: () => document.getElementById('drExportData'),
 
+  saveState: () => document.getElementById('drSaveState'),
+  loadState: () => document.getElementById('drLoadState'),
+  loadStateFile: () => document.getElementById('drLoadStateFile'),
+
   staadUnit: () => document.getElementById('drStaadUnit'),
   staadMat: () => document.getElementById('drStaadMat'),
   staadGroup: () => document.getElementById('drStaadGroup'),
@@ -125,6 +129,86 @@ function downloadText(filename, text){
   a.click();
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 500);
+}
+
+function getUiState(){
+  return {
+    v: 1,
+    grid: {
+      nx: parseInt(els.gridX()?.value||'0',10) || 0,
+      ny: parseInt(els.gridY()?.value||'0',10) || 0,
+      spacingX: parseFloat(els.spacingX()?.value||'0') || 0,
+      spacingY: parseFloat(els.spacingY()?.value||'0') || 0,
+      spansX: String(els.spansX()?.value||''),
+      spansY: String(els.spansY()?.value||''),
+    },
+    levelsMm: getLevelElevationsMm(),
+    profiles: {
+      stdAll: els.stdAll()?.value || 'KS',
+      colShape: els.colShape()?.value || 'H',
+      colSize: els.colSize()?.value || '',
+      beamShape: els.beamShape()?.value || 'H',
+      beamSize: els.beamSize()?.value || '',
+      subEnable: els.subEnable()?.value || '0',
+      subShape: els.subShape()?.value || 'H',
+      subSize: els.subSize()?.value || '',
+      subCount: String(els.subCount()?.value||'0'),
+      joistEnable: els.joistEnable()?.value || '0',
+      braceType: els.braceType?.()?.value || 'X',
+      braceShape: els.braceShape?.()?.value || 'L',
+      braceSize: els.braceSize?.()?.value || '',
+    },
+    overrides: JSON.parse(JSON.stringify(overrides)),
+    braces: JSON.parse(JSON.stringify(braces)),
+  };
+}
+
+function applyUiState(s){
+  if(!s) return;
+  // Grid
+  if(els.gridX() && s.grid?.nx) els.gridX().value = String(s.grid.nx);
+  if(els.gridY() && s.grid?.ny) els.gridY().value = String(s.grid.ny);
+  if(els.spacingX() && s.grid?.spacingX!=null) els.spacingX().value = String(s.grid.spacingX);
+  if(els.spacingY() && s.grid?.spacingY!=null) els.spacingY().value = String(s.grid.spacingY);
+  if(els.spansX() && s.grid?.spansX!=null) els.spansX().value = String(s.grid.spansX);
+  if(els.spansY() && s.grid?.spansY!=null) els.spansY().value = String(s.grid.spansY);
+
+  // Levels
+  if(Array.isArray(s.levelsMm)) renderLevels(s.levelsMm);
+
+  // Profiles
+  if(els.stdAll() && s.profiles?.stdAll) els.stdAll().value = s.profiles.stdAll;
+  // rebuild selectors after std change
+  fillProfileSelectors();
+
+  if(els.colShape() && s.profiles?.colShape) els.colShape().value = s.profiles.colShape;
+  if(els.beamShape() && s.profiles?.beamShape) els.beamShape().value = s.profiles.beamShape;
+  if(els.subShape() && s.profiles?.subShape) els.subShape().value = s.profiles.subShape;
+  if(els.braceShape?.() && s.profiles?.braceShape) els.braceShape().value = s.profiles.braceShape;
+
+  // rebuild sizes for each shape
+  // (reuse internal rebuildSizeSelect via fillProfileSelectors's closures isn't accessible, so just call fillProfileSelectors again)
+  fillProfileSelectors();
+
+  if(els.colSize() && s.profiles?.colSize) els.colSize().value = s.profiles.colSize;
+  if(els.beamSize() && s.profiles?.beamSize) els.beamSize().value = s.profiles.beamSize;
+  if(els.subEnable() && s.profiles?.subEnable!=null) els.subEnable().value = String(s.profiles.subEnable);
+  if(els.subSize() && s.profiles?.subSize) els.subSize().value = s.profiles.subSize;
+  if(els.subCount() && s.profiles?.subCount!=null) els.subCount().value = String(s.profiles.subCount);
+  if(els.joistEnable() && s.profiles?.joistEnable!=null) els.joistEnable().value = String(s.profiles.joistEnable);
+
+  if(els.braceType?.() && s.profiles?.braceType) els.braceType().value = s.profiles.braceType;
+  if(els.braceSize?.() && s.profiles?.braceSize) els.braceSize().value = s.profiles.braceSize;
+
+  // Overrides
+  for(const k of Object.keys(overrides)) delete overrides[k];
+  Object.assign(overrides, s.overrides || {});
+
+  // Braces
+  braces.splice(0, braces.length);
+  if(Array.isArray(s.braces)) braces.push(...s.braces);
+
+  rebuild();
 }
 
 function collectMemberRecords(){
@@ -1813,6 +1897,35 @@ function wire() {
 
   els.exportIfc()?.addEventListener('click', ()=>{
     window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: 'IFC Export는 준비중입니다. (현재 STAAD/DATA만 지원)' }));
+  });
+
+  // Save/Load state
+  els.saveState()?.addEventListener('click', ()=>{
+    const s = getUiState();
+    const ts = new Date().toISOString().replaceAll(':','').slice(0,15);
+    downloadText(`civilarchi-draft-${ts}.civilarchi`, JSON.stringify(s, null, 2));
+  });
+
+  els.loadState()?.addEventListener('click', ()=>{
+    els.loadStateFile()?.click();
+  });
+
+  els.loadStateFile()?.addEventListener('change', (ev)=>{
+    const f = ev.target.files?.[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const s = JSON.parse(String(reader.result||''));
+        applyUiState(s);
+        window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: '작업상태를 불러왔습니다.' }));
+      } catch(e){
+        window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: '불러오기 실패: 파일 형식(JSON) 확인' }));
+      }
+    };
+    reader.readAsText(f);
+    // reset input
+    ev.target.value = '';
   });
 }
 

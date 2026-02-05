@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0519" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0548" />
 </head>
 <body>
   <header class="top">
@@ -438,6 +438,12 @@
                   <button class="btn" id="drExportData">DATA Export</button>
                 </div>
 
+                <div class="export-bar" style="margin-top:10px">
+                  <button class="btn" id="drSaveState">작업상태 저장</button>
+                  <button class="btn" id="drLoadState">작업상태 불러오기</button>
+                  <input type="file" id="drLoadStateFile" accept=".civilarchi,.json" style="display:none" />
+                </div>
+
                 <div class="export-opts" style="margin-top:10px">
                   <div class="sb-title" style="margin-top:0">STAAD 옵션</div>
                   <div class="form" style="margin-top:8px">
@@ -479,7 +485,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0519"></script>
-  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0519"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0548"></script>
+  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0548"></script>
 </body>
 </html>
