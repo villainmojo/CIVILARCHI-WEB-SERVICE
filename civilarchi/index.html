@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0412" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0413" />
 </head>
 <body>
   <header class="top">
@@ -228,35 +228,10 @@
               <h1>STEEL STRUCTURE DRAFT</h1>
               <p class="muted">mm 단위 · 그리드 교차점 기둥 + 레벨별 빔 자동 배치 · 3D로 확인</p>
               <div class="muted small" id="drQtySumTop">전체 물량 합산 무게: -</div>
-              <div class="draft-topbar" id="drTopOpts">
-                <div class="draft-topopts">
-                  <label class="ck"><input type="checkbox" id="drOptJoist" /> <span>joist</span></label>
-                  <label class="ck"><input type="checkbox" id="drOptCheckPlate" /> <span>체크플레이트</span></label>
-                  <label class="ck"><input type="checkbox" id="drOptGrating" /> <span>그레이팅</span></label>
-                </div>
-
-                <div class="draft-subjoist">
-                  <div class="sb-title" style="margin-top:0">Sub beam 설정</div>
-                  <div class="form" style="margin-top:8px">
-                    <label><span>사용</span><select id="drSubEnable">
-                      <option value="0" selected>OFF</option>
-                      <option value="1">ON</option>
-                    </select></label>
-                    <label><span>부재종류</span><select id="drSubShape"></select></label>
-                    <label><span>프로파일</span><select id="drSubSize"></select></label>
-                    <label><span>갯수(각 Bay당)</span><input id="drSubCount" type="number" min="0" step="1" value="0" /></label>
-                    <div class="hint">그리드 간격이 더 가까운 방향으로 자동 배치됩니다.</div>
-                  </div>
-
-                  <div class="sb-title" style="margin-top:10px">Joist 설정</div>
-                  <div class="form" style="margin-top:8px">
-                    <label><span>사용</span><select id="drJoistEnable">
-                      <option value="0" selected>OFF</option>
-                      <option value="1">ON</option>
-                    </select></label>
-                    <div class="hint">Sub beam과 직교(90°) 방향으로, 빔-빔(및 sub beam) 사이에 700mm 간격으로 배치합니다.</div>
-                  </div>
-                </div>
+              <div class="draft-topopts" id="drTopOpts">
+                <label class="ck"><input type="checkbox" id="drOptJoist" /> <span>joist</span></label>
+                <label class="ck"><input type="checkbox" id="drOptCheckPlate" /> <span>체크플레이트</span></label>
+                <label class="ck"><input type="checkbox" id="drOptGrating" /> <span>그레이팅</span></label>
               </div>
             </div>
             <div class="page-actions">
@@ -342,6 +317,28 @@
                 </details>
 
                 <details class="card fold" open>
+                  <summary>Sub beam / Joist</summary>
+                  <div class="form" style="margin-top:10px">
+                    <div class="sb-title" style="margin-top:0">Sub beam 설정</div>
+                    <label><span>사용</span><select id="drSubEnable">
+                      <option value="0" selected>OFF</option>
+                      <option value="1">ON</option>
+                    </select></label>
+                    <label><span>부재종류</span><select id="drSubShape"></select></label>
+                    <label><span>프로파일</span><select id="drSubSize"></select></label>
+                    <label><span>갯수(각 Bay당)</span><input id="drSubCount" type="number" min="0" step="1" value="0" /></label>
+                    <div class="hint">그리드 간격이 더 가까운 방향으로 자동 배치됩니다.</div>
+
+                    <div class="sb-title" style="margin-top:12px">Joist 설정</div>
+                    <label><span>사용</span><select id="drJoistEnable">
+                      <option value="0" selected>OFF</option>
+                      <option value="1">ON</option>
+                    </select></label>
+                    <div class="hint">Sub beam과 직교(90°) 방향으로, 빔-빔(및 sub beam) 사이에 700mm 간격으로 배치합니다.</div>
+                  </div>
+                </details>
+
+                <details class="card fold" open>
                   <summary>프로파일</summary>
                   <div class="form" style="margin-top:10px">
                     <label><span>국가/규격 (전체)</span><select id="drStdAll"></select></label>
@@ -415,7 +412,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0412"></script>
-  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0412"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0413"></script>
+  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0413"></script>
 </body>
 </html>
