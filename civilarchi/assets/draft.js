@@ -802,32 +802,55 @@ function rebuild() {
     }
   }
 
-  // joists (X-dir, 700mm spacing, C 125x65x6x8)
+  // joists (700mm spacing, orthogonal to sub beam direction)
   if(d.joistEnabled){
     const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
     const stdKey = d.profileBeam.stdKey || 'KS';
     const cItems = data?.[stdKey]?.shapes?.['C']?.items || [];
     const c125 = cItems.find(it => /C\s*125x65x6x8/i.test(it.name)) || cItems[0] || null;
     const profJ = c125 ? { stdKey, shapeKey: 'C', sizeKey: c125.key, name: c125.name, kgm: c125.kgm ?? null } : { stdKey, shapeKey: 'C', sizeKey: 'C125', name: 'C 125x65x6x8', kgm: null };
+    const cdim = parseC(profJ.name);
 
-    const sizeYmm = d.yPosMm[d.yPosMm.length-1] || 0;
     const step = 700;
-    // rough dims
-    const jb = mmToM(65);
-    const jd = mmToM(125);
+    const sizeXmm = d.xPosMm[d.xPosMm.length-1] || 0;
+    const sizeYmm = d.yPosMm[d.yPosMm.length-1] || 0;
 
+    // Sub beam direction was determined earlier as runSubAlongX
+    // If sub beams run along X => joists run along Y (length in Z)
     for(const z of d.levelsMm){
-      for(let ymm=step; ymm < sizeYmm; ymm += step){
-        for(let ix=0; ix<d.nx-1; ix++){
-          const x0 = d.xPosMm[ix] || 0;
-          const x1 = d.xPosMm[ix+1] || 0;
-          const len = mmToM(x1-x0);
-          const id = `JX_${z}_${ymm}_${ix}`;
-          const geom = new THREE.BoxGeometry(len || 0.001, jd, jb);
-          const mesh = new THREE.Mesh(geom, state.matGray);
-          mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
-          mesh.position.copy(toV((x0+x1)/2, ymm, z - 125/2));
-          state.memberGroup.add(mesh);
+      if(runSubAlongX){
+        for(let bayX=0; bayX<d.nx-1; bayX++){
+          const x0 = d.xPosMm[bayX] || 0;
+          const x1 = d.xPosMm[bayX+1] || 0;
+          for(let xmm=x0+step; xmm < x1; xmm += step){
+            const len = mmToM(sizeYmm);
+            const id = `JY_${z}_${bayX}_${xmm}`;
+            const geom = (cdim && profJ.shapeKey==='C')
+              ? makeCGeomForBeamY(len || 0.001, cdim)
+              : new THREE.BoxGeometry(mmToM(65), mmToM(125), len || 0.001);
+            const mesh = new THREE.Mesh(geom, state.matGray);
+            mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
+            // center in Y (grid) direction
+            mesh.position.copy(toV(xmm, sizeYmm/2, z - (cdim?.H ?? 125)/2));
+            state.memberGroup.add(mesh);
+          }
+        }
+      } else {
+        // sub beams run along Y => joists run along X (length in X)
+        for(let bayY=0; bayY<d.ny-1; bayY++){
+          const y0 = d.yPosMm[bayY] || 0;
+          const y1 = d.yPosMm[bayY+1] || 0;
+          for(let ymm=y0+step; ymm < y1; ymm += step){
+            const len = mmToM(sizeXmm);
+            const id = `JX_${z}_${bayY}_${ymm}`;
+            const geom = (cdim && profJ.shapeKey==='C')
+              ? makeCGeomForBeamX(len || 0.001, cdim)
+              : new THREE.BoxGeometry(len || 0.001, mmToM(125), mmToM(65));
+            const mesh = new THREE.Mesh(geom, state.matGray);
+            mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
+            mesh.position.copy(toV(sizeXmm/2, ymm, z - (cdim?.H ?? 125)/2));
+            state.memberGroup.add(mesh);
+          }
         }
       }
     }
