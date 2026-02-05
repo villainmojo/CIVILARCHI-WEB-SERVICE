@@ -31,11 +31,10 @@ const els = {
   addLevel: () => document.getElementById('drAddLevel'),
   copy: () => document.getElementById('drCopy'),
 
-  colCount: () => document.getElementById('drColCount'),
-  colLenM: () => document.getElementById('drColLenM'),
-  beamCount: () => document.getElementById('drBeamCount'),
-  beamLenM: () => document.getElementById('drBeamLenM'),
-  totalLenM: () => document.getElementById('drTotalLenM'),
+  qtyRows: () => document.getElementById('drQtyRows'),
+  qtySumCount: () => document.getElementById('drQtySumCount'),
+  qtySumLen: () => document.getElementById('drQtySumLen'),
+  qtySumLoad: () => document.getElementById('drQtySumLoad'),
 };
 
 const state = {
@@ -194,18 +193,45 @@ function ensureThree() {
   state.inited = true;
 }
 
+function renderQty(d) {
+  const rowsEl = els.qtyRows();
+  if (!rowsEl) return;
+
+  const colLenM = mmToM(d.colLenMm);
+  const beamLenM = mmToM(d.beamLenMm);
+
+  const rows = [
+    { cat: '기둥', member: 'COLUMN', len: colLenM, count: d.colCount, load: null },
+    { cat: '보', member: 'BEAM', len: beamLenM, count: d.beamCount, load: null },
+  ];
+
+  rowsEl.innerHTML = '';
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.cat}</td>
+      <td class="mono">${r.member}</td>
+      <td class="right mono">${fmt(r.len, 3)}</td>
+      <td class="right mono">${fmt(r.count, 0)}</td>
+      <td class="right mono">${r.load == null ? '-' : fmt(r.load, 3)}</td>
+    `;
+    rowsEl.appendChild(tr);
+  }
+
+  const sumCount = d.colCount + d.beamCount;
+  const sumLen = colLenM + beamLenM;
+
+  els.qtySumCount().textContent = fmt(sumCount, 0);
+  els.qtySumLen().textContent = fmt(sumLen, 3);
+  els.qtySumLoad().textContent = '-';
+}
+
 function rebuild() {
   ensureThree();
   if (!state.inited) return;
 
   const d = calc();
-
-  // stats
-  els.colCount().textContent = String(d.colCount);
-  els.colLenM().textContent = fmt(mmToM(d.colLenMm), 3);
-  els.beamCount().textContent = String(d.beamCount);
-  els.beamLenM().textContent = fmt(mmToM(d.beamLenMm), 3);
-  els.totalLenM().textContent = fmt(mmToM(d.colLenMm + d.beamLenMm), 3);
+  renderQty(d);
 
   clearGroup(state.gridGroup);
   clearGroup(state.memberGroup);
@@ -295,10 +321,10 @@ function rebuild() {
 async function copyToClipboard() {
   const d = calc();
   const lines = [];
-  lines.push(['type', 'count', 'total_length_m'].join('\t'));
-  lines.push(['COLUMN', String(d.colCount), String(mmToM(d.colLenMm))].join('\t'));
-  lines.push(['BEAM', String(d.beamCount), String(mmToM(d.beamLenMm))].join('\t'));
-  lines.push(['TOTAL', '', String(mmToM(d.colLenMm + d.beamLenMm))].join('\t'));
+  lines.push(['분류', '부재종류', '길이(m)', '갯수', '하중'].join('\t'));
+  lines.push(['기둥', 'COLUMN', String(mmToM(d.colLenMm)), String(d.colCount), '-'].join('\t'));
+  lines.push(['보', 'BEAM', String(mmToM(d.beamLenMm)), String(d.beamCount), '-'].join('\t'));
+  lines.push(['합계', '', String(mmToM(d.colLenMm + d.beamLenMm)), String(d.colCount + d.beamCount), '-'].join('\t'));
   const tsv = lines.join('\n');
   await navigator.clipboard.writeText(tsv);
 }
@@ -322,12 +348,10 @@ function wire() {
 
 let wired = false;
 function show() {
-  // Called when draft view becomes visible
   if (!wired) {
     wire();
     wired = true;
   }
-  // Defer a moment to ensure layout/height computed
   setTimeout(rebuild, 30);
 }
 

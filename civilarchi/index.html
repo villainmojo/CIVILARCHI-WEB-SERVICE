@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0251" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0256" />
 </head>
 <body>
   <header class="top">
@@ -265,19 +265,35 @@
 
             <section class="draft-qty">
               <div class="card" style="margin-top:0">
-                <h2>전체 물량(길이)</h2>
-                <div class="result">
-                  <div class="kv"><div class="k">기둥 수량</div><div class="v mono" id="drColCount">-</div></div>
-                  <div class="kv"><div class="k">기둥 총 길이</div><div class="v"><span class="mono" id="drColLenM">-</span> <span class="muted">m</span></div></div>
-                  <div class="kv"><div class="k">빔 수량</div><div class="v mono" id="drBeamCount">-</div></div>
-                  <div class="kv"><div class="k">빔 총 길이</div><div class="v"><span class="mono" id="drBeamLenM">-</span> <span class="muted">m</span></div></div>
-                  <div class="kv"><div class="k">총 길이</div><div class="v"><span class="mono" id="drTotalLenM">-</span> <span class="muted">m</span></div></div>
+                <h2>전체 물량</h2>
+
+                <div class="sum-table-wrap">
+                  <table class="sum-table">
+                    <thead>
+                      <tr>
+                        <th>분류</th>
+                        <th>부재종류</th>
+                        <th class="right">길이 (m)</th>
+                        <th class="right">갯수</th>
+                        <th class="right">하중</th>
+                      </tr>
+                    </thead>
+                    <tbody id="drQtyRows"></tbody>
+                    <tfoot>
+                      <tr>
+                        <th colspan="2">합산</th>
+                        <th class="right mono" id="drQtySumLen">-</th>
+                        <th class="right mono" id="drQtySumCount">-</th>
+                        <th class="right mono" id="drQtySumLoad">-</th>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
 
                 <div class="btns" style="margin-top:12px">
                   <button class="btn" id="drCopy">엑셀로 복사</button>
                 </div>
-                <div class="hint">(MVP) 3D는 개념 모델입니다. 부재 단면 형상은 추후 프로파일/데이터시트 기반으로 확장합니다.</div>
+                <div class="hint">(MVP) 하중 값은 다음 단계에서 단위중량(kg/m) 연결 후 계산됩니다. 현재는 길이/갯수 중심으로 집계합니다.</div>
               </div>
             </section>
           </div>
@@ -292,6 +308,6 @@
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
   <script src="/civilarchi/assets/app.js?v=20260205_0251"></script>
-  <script type="module" src="/civilarchi/assets/draft.mjs?v=20260205_0251"></script>
+  <script type="module" src="/civilarchi/assets/draft.js?v=20260205_0256"></script>
 </body>
 </html>
