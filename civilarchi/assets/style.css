@@ -230,6 +230,9 @@ label.inline input{width:auto}
 .ck{display:inline-flex; gap:8px; align-items:center; font-weight:700; color: rgba(31,42,68,0.85)}
 .ck input{width:16px; height:16px}
 
+.ov-split{display:flex; gap:12px; align-items:flex-start}
+.ov-col{flex: 1 1 0}
+
 .draft-ov{
   position:absolute;
   top:12px; right:12px;

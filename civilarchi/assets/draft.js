@@ -51,6 +51,12 @@ const els = {
   beamShape: () => document.getElementById('drBeamShape'),
   beamSize: () => document.getElementById('drBeamSize'),
 
+  subEnable: () => document.getElementById('drSubEnable'),
+  subShape: () => document.getElementById('drSubShape'),
+  subSize: () => document.getElementById('drSubSize'),
+  subCount: () => document.getElementById('drSubCount'),
+  joistEnable: () => document.getElementById('drJoistEnable'),
+
   copy: () => document.getElementById('drCopy'),
 
   qtyRows: () => document.getElementById('drQtyRows'),
@@ -177,9 +183,24 @@ function cumulativePos(spans){
   return pos;
 }
 
+function getProfileBy(shapeKey, sizeKey){
+  const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+  const stdKey = els.stdAll()?.value || 'KS';
+  const item = data?.[stdKey]?.shapes?.[shapeKey]?.items?.find(it => it.key === sizeKey) || null;
+  return { stdKey, shapeKey, sizeKey, item, kgm: item?.kgm ?? null, name: item?.name ?? '' };
+}
+
 function getProfile(role){
   const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
   const stdKey = els.stdAll()?.value || 'KS';
+
+  if(role==='sub'){
+    const shapeKey = els.subShape()?.value || 'H';
+    const sizeKey = els.subSize()?.value || '';
+    const item = data?.[stdKey]?.shapes?.[shapeKey]?.items?.find(it => it.key === sizeKey) || null;
+    return { stdKey, shapeKey, sizeKey, item, kgm: item?.kgm ?? null, name: item?.name ?? '' };
+  }
+
   const shapeKey = (role==='col' ? els.colShape()?.value : els.beamShape()?.value) || 'H';
   const sizeKey = (role==='col' ? els.colSize()?.value : els.beamSize()?.value) || '';
   const item = data?.[stdKey]?.shapes?.[shapeKey]?.items?.find(it => it.key === sizeKey) || null;
@@ -221,8 +242,13 @@ function calc() {
 
   const profileCol = getProfile('col');
   const profileBeam = getProfile('beam');
+  const profileSub = getProfile('sub');
 
-  return { nx, ny, spansX, spansY, xPosMm, yPosMm, levelsMm, heightMm, colCount, colLenMm, beamCount, beamLenMm, profileCol, profileBeam };
+  const subEnabled = (els.subEnable()?.value === '1');
+  const subCountPerBay = clampInt(els.subCount()?.value ?? 0, 0);
+  const joistEnabled = (els.joistEnable()?.value === '1');
+
+  return { nx, ny, spansX, spansY, xPosMm, yPosMm, levelsMm, heightMm, colCount, colLenMm, beamCount, beamLenMm, profileCol, profileBeam, profileSub, subEnabled, subCountPerBay, joistEnabled };
 }
 
 function ensureThree() {
@@ -390,6 +416,69 @@ function renderQty(d) {
     }
   }
 
+  // Sub beams
+  if(d.subEnabled && d.subCountPerBay > 0){
+    const avgX = (d.spansX.reduce((a,b)=>a+b,0) / Math.max(1, d.spansX.length));
+    const avgY = (d.spansY.reduce((a,b)=>a+b,0) / Math.max(1, d.spansY.length));
+    const runAlongX = avgX <= avgY;
+
+    for(const z of d.levelsMm){
+      if(runAlongX){
+        // between Y gridlines, place sub beams along X
+        for(let bayY=0; bayY<d.ny-1; bayY++){
+          const y0 = d.yPosMm[bayY] || 0;
+          const y1 = d.yPosMm[bayY+1] || 0;
+          for(let k=1; k<=d.subCountPerBay; k++){
+            const y = y0 + (k/(d.subCountPerBay+1))*(y1-y0);
+            for(let ix=0; ix<d.nx-1; ix++){
+              const x0 = d.xPosMm[ix] || 0;
+              const x1 = d.xPosMm[ix+1] || 0;
+              const lenM = mmToM(x1-x0);
+              add('Sub beam', d.profileSub, lenM);
+            }
+          }
+        }
+      } else {
+        // between X gridlines, place sub beams along Y
+        for(let bayX=0; bayX<d.nx-1; bayX++){
+          const x0 = d.xPosMm[bayX] || 0;
+          const x1 = d.xPosMm[bayX+1] || 0;
+          for(let k=1; k<=d.subCountPerBay; k++){
+            const x = x0 + (k/(d.subCountPerBay+1))*(x1-x0);
+            for(let iy=0; iy<d.ny-1; iy++){
+              const y0 = d.yPosMm[iy] || 0;
+              const y1 = d.yPosMm[iy+1] || 0;
+              const lenM = mmToM(y1-y0);
+              add('Sub beam', d.profileSub, lenM);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Joists (fixed: C 125x65x6x8, X-dir, 700 spacing)
+  if(d.joistEnabled){
+    const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+    const stdKey = d.profileBeam.stdKey || 'KS';
+    const cItems = data?.[stdKey]?.shapes?.['C']?.items || [];
+    const c125 = cItems.find(it => /C\s*125x65x6x8/i.test(it.name)) || cItems[0] || null;
+    const profJ = c125 ? { stdKey, shapeKey: 'C', sizeKey: c125.key, name: c125.name, kgm: c125.kgm ?? null } : { stdKey, shapeKey: 'C', sizeKey: 'C125', name: 'C 125x65x6x8', kgm: null };
+
+    const sizeY = d.yPosMm[d.yPosMm.length-1] || 0;
+    const step = 700;
+    for(const z of d.levelsMm){
+      for(let y=step; y < sizeY; y+=step){
+        for(let ix=0; ix<d.nx-1; ix++){
+          const x0 = d.xPosMm[ix] || 0;
+          const x1 = d.xPosMm[ix+1] || 0;
+          const lenM = mmToM(x1-x0);
+          add('Joist', profJ, lenM);
+        }
+      }
+    }
+  }
+
   const rows = [...g.values()].map(r => ({
     ...r,
     loadKg: (r.loadKg && r.loadKg > 0) ? r.loadKg : null,
@@ -408,8 +497,8 @@ function renderQty(d) {
     rowsEl.appendChild(tr);
   }
 
-  const sumCount = d.colCount + d.beamCount;
-  const sumLen = colLenM + beamLenM;
+  const sumCount = rows.reduce((a,r)=>a + (Number.isFinite(r.count)?r.count:0), 0);
+  const sumLen = rows.reduce((a,r)=>a + (Number.isFinite(r.len)?r.len:0), 0);
   const sumLoad = rows.reduce((acc, r) => acc + (Number.isFinite(r.loadKg) ? r.loadKg : 0), 0) || null;
 
   els.qtySumCount().textContent = fmt(sumCount, 0);
@@ -585,6 +674,96 @@ function rebuild() {
     }
   }
 
+  // Sub beams + Joists
+  const avgX = (d.spansX.reduce((a,b)=>a+b,0) / Math.max(1, d.spansX.length));
+  const avgY = (d.spansY.reduce((a,b)=>a+b,0) / Math.max(1, d.spansY.length));
+  const runSubAlongX = avgX <= avgY;
+
+  // sub beams
+  if(d.subEnabled && d.subCountPerBay > 0){
+    const prof = d.profileSub;
+    const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
+    const b = mmToM(dim?.B ?? 120);
+    const dd = mmToM(dim?.H ?? 200);
+
+    for(const z of d.levelsMm){
+      if(runSubAlongX){
+        for(let bayY=0; bayY<d.ny-1; bayY++){
+          const y0 = d.yPosMm[bayY] || 0;
+          const y1 = d.yPosMm[bayY+1] || 0;
+          for(let k=1; k<=d.subCountPerBay; k++){
+            const y = y0 + (k/(d.subCountPerBay+1))*(y1-y0);
+            for(let ix=0; ix<d.nx-1; ix++){
+              const x0 = d.xPosMm[ix] || 0;
+              const x1 = d.xPosMm[ix+1] || 0;
+              const len = mmToM(x1-x0);
+              const id = `SBX_${z}_${bayY}_${k}_${ix}`;
+              const geom = (dim && prof.shapeKey==='H')
+                ? makeHGeomForBeamX(len || 0.001, dim)
+                : new THREE.BoxGeometry(len || 0.001, dd, b);
+              const mesh = new THREE.Mesh(geom, state.matGray);
+              mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
+              mesh.position.copy(toV((x0+x1)/2, y, z - (dim?.H ?? 200)/2));
+              state.memberGroup.add(mesh);
+            }
+          }
+        }
+      } else {
+        for(let bayX=0; bayX<d.nx-1; bayX++){
+          const x0 = d.xPosMm[bayX] || 0;
+          const x1 = d.xPosMm[bayX+1] || 0;
+          for(let k=1; k<=d.subCountPerBay; k++){
+            const x = x0 + (k/(d.subCountPerBay+1))*(x1-x0);
+            for(let iy=0; iy<d.ny-1; iy++){
+              const y0 = d.yPosMm[iy] || 0;
+              const y1 = d.yPosMm[iy+1] || 0;
+              const len = mmToM(y1-y0);
+              const id = `SBY_${z}_${bayX}_${k}_${iy}`;
+              const geom = (dim && prof.shapeKey==='H')
+                ? makeHGeomForBeamY(len || 0.001, dim)
+                : new THREE.BoxGeometry(b, dd, len || 0.001);
+              const mesh = new THREE.Mesh(geom, state.matGray);
+              mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
+              mesh.position.copy(toV(x, (y0+y1)/2, z - (dim?.H ?? 200)/2));
+              state.memberGroup.add(mesh);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // joists (X-dir, 700mm spacing, C 125x65x6x8)
+  if(d.joistEnabled){
+    const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+    const stdKey = d.profileBeam.stdKey || 'KS';
+    const cItems = data?.[stdKey]?.shapes?.['C']?.items || [];
+    const c125 = cItems.find(it => /C\s*125x65x6x8/i.test(it.name)) || cItems[0] || null;
+    const profJ = c125 ? { stdKey, shapeKey: 'C', sizeKey: c125.key, name: c125.name, kgm: c125.kgm ?? null } : { stdKey, shapeKey: 'C', sizeKey: 'C125', name: 'C 125x65x6x8', kgm: null };
+
+    const sizeYmm = d.yPosMm[d.yPosMm.length-1] || 0;
+    const step = 700;
+    // rough dims
+    const jb = mmToM(65);
+    const jd = mmToM(125);
+
+    for(const z of d.levelsMm){
+      for(let ymm=step; ymm < sizeYmm; ymm += step){
+        for(let ix=0; ix<d.nx-1; ix++){
+          const x0 = d.xPosMm[ix] || 0;
+          const x1 = d.xPosMm[ix+1] || 0;
+          const len = mmToM(x1-x0);
+          const id = `JX_${z}_${ymm}_${ix}`;
+          const geom = new THREE.BoxGeometry(len || 0.001, jd, jb);
+          const mesh = new THREE.Mesh(geom, state.matGray);
+          mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
+          mesh.position.copy(toV((x0+x1)/2, ymm, z - 125/2));
+          state.memberGroup.add(mesh);
+        }
+      }
+    }
+  }
+
   // frame camera
   const radius = mmToM(Math.max(sizeX, sizeY, d.heightMm)) * 0.9 + 2;
   state.camera.position.set(radius, radius * 0.85, radius);
@@ -624,8 +803,13 @@ function fillProfileSelectors(){
   const colSize = els.colSize();
   const beamShape = els.beamShape();
   const beamSize = els.beamSize();
+  const subEnable = els.subEnable();
+  const subShape = els.subShape();
+  const subSize = els.subSize();
+  const subCount = els.subCount();
+  const joistEnable = els.joistEnable();
 
-  if(!stdAll || !colShape || !colSize || !beamShape || !beamSize) return;
+  if(!stdAll || !colShape || !colSize || !beamShape || !beamSize || !subEnable || !subShape || !subSize || !subCount || !joistEnable) return;
 
   const STD_LABEL = { KS: 'KR · KS', JIS: 'JP · JIS' };
   const SHAPE_KEYS = ['H','C','L','LC','Rect','I','T'];
@@ -670,8 +854,14 @@ function fillProfileSelectors(){
   function rebuildAll(){
     rebuildShapeSelect(colShape);
     rebuildShapeSelect(beamShape);
+    rebuildShapeSelect(subShape);
     rebuildSizeSelect(colShape, colSize);
     rebuildSizeSelect(beamShape, beamSize);
+    rebuildSizeSelect(subShape, subSize);
+
+    // default OFF
+    if(!subEnable.value) subEnable.value = '0';
+    if(!joistEnable.value) joistEnable.value = '0';
   }
 
   rebuildAll();
@@ -679,8 +869,15 @@ function fillProfileSelectors(){
   stdAll.addEventListener('change', ()=>{ rebuildAll(); rebuild(); });
   colShape.addEventListener('change', ()=>{ rebuildSizeSelect(colShape, colSize); rebuild(); });
   beamShape.addEventListener('change', ()=>{ rebuildSizeSelect(beamShape, beamSize); rebuild(); });
+  subShape.addEventListener('change', ()=>{ rebuildSizeSelect(subShape, subSize); rebuild(); });
+
   colSize.addEventListener('change', rebuild);
   beamSize.addEventListener('change', rebuild);
+  subSize.addEventListener('change', rebuild);
+
+  subEnable.addEventListener('change', rebuild);
+  subCount.addEventListener('input', rebuild);
+  joistEnable.addEventListener('change', rebuild);
 }
 
 function initSelectionUI(){
