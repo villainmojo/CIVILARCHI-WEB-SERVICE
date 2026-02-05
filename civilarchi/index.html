@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0224" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0243" />
 </head>
 <body>
   <header class="top">
@@ -31,6 +31,7 @@
       <aside class="sidebar">
         <div class="sb-title">기능</div>
         <a class="sb-item" href="#hbeam" data-view="hbeam">STEEL MEMBER 하중 계산기</a>
+        <a class="sb-item" href="#draft" data-view="draft">STEEL STRUCTURE DRAFT</a>
 
         <div class="sb-title">시스템</div>
         <div class="sb-box">
@@ -68,6 +69,14 @@
                       <div class="qc-name">STEEL MEMBER 하중 계산기</div>
                     </div>
                     <div class="qc-desc">KS/JIS · 형강/강관/앵글 등 · kg/m → kg, ton</div>
+                  </button>
+
+                  <button class="quick-card" data-goto="draft">
+                    <div class="qc-top">
+                      <div class="qc-icon">3D</div>
+                      <div class="qc-name">STEEL STRUCTURE DRAFT</div>
+                    </div>
+                    <div class="qc-desc">그리드/레벨 기반 3D 배치 + 물량 합계</div>
                   </button>
 
                   <button class="quick-card" disabled>
@@ -212,6 +221,64 @@
           </section>
         </section>
 
+        <!-- DRAFT VIEW -->
+        <section class="view" data-view="draft" hidden>
+          <div class="pagehead">
+            <div>
+              <h1>STEEL STRUCTURE DRAFT</h1>
+              <p class="muted">mm 단위 · 그리드 교차점 기둥 + 레벨별 빔 자동 배치 · 3D로 확인</p>
+            </div>
+            <div class="page-actions">
+              <button class="btn" data-goto="home">홈으로</button>
+            </div>
+          </div>
+
+          <div class="draft">
+            <aside class="draft-panel">
+              <div class="card" style="box-shadow:none">
+                <h2>그리드</h2>
+                <div class="form">
+                  <label><span>Grid X (가로 개수)</span><input id="drGridX" type="number" min="1" step="1" value="4" /></label>
+                  <label><span>Grid Y (세로 개수)</span><input id="drGridY" type="number" min="1" step="1" value="3" /></label>
+                  <label><span>X 간격 (mm)</span><input id="drSpacingX" type="number" min="1" step="1" value="6000" /></label>
+                  <label><span>Y 간격 (mm)</span><input id="drSpacingY" type="number" min="1" step="1" value="6000" /></label>
+                </div>
+              </div>
+
+              <div class="card" style="box-shadow:none; margin-top:12px">
+                <h2>레벨</h2>
+                <div class="form">
+                  <div id="drLevels"></div>
+                  <div class="btns">
+                    <button class="btn" id="drAddLevel">레벨 추가</button>
+                  </div>
+                  <div class="hint">각 레벨 높이(mm)를 누적해서 기둥/빔이 생성됩니다.</div>
+                </div>
+              </div>
+
+              <div class="card" style="box-shadow:none; margin-top:12px">
+                <h2>물량(길이)</h2>
+                <div class="result">
+                  <div class="kv"><div class="k">기둥 수량</div><div class="v mono" id="drColCount">-</div></div>
+                  <div class="kv"><div class="k">기둥 총 길이</div><div class="v"><span class="mono" id="drColLenM">-</span> <span class="muted">m</span></div></div>
+                  <div class="kv"><div class="k">빔 수량</div><div class="v mono" id="drBeamCount">-</div></div>
+                  <div class="kv"><div class="k">빔 총 길이</div><div class="v"><span class="mono" id="drBeamLenM">-</span> <span class="muted">m</span></div></div>
+                  <div class="kv"><div class="k">총 길이</div><div class="v"><span class="mono" id="drTotalLenM">-</span> <span class="muted">m</span></div></div>
+                </div>
+
+                <div class="btns" style="margin-top:12px">
+                  <button class="btn" id="drCopy">엑셀로 복사</button>
+                </div>
+                <div class="hint">(MVP) 3D는 개념 모델입니다. 부재 단면 형상은 추후 프로파일/데이터시트 기반으로 확장합니다.</div>
+              </div>
+            </aside>
+
+            <section class="draft-canvas-wrap">
+              <div class="draft-canvas" id="drCanvas"></div>
+            </section>
+          </div>
+        </section>
+
         <footer class="footer">
           <div class="muted small">© SENGVIS · CIVILARCHI</div>
         </footer>
@@ -219,7 +286,9 @@
     </div>
   </main>
 
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0224"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0243"></script>
 </body>
 </html>

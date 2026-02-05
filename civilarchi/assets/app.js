@@ -402,5 +402,349 @@
     });
   }
 
+  // ------------------------
+  // Draft (Three.js)
+  // ------------------------
+
+  const dr = {
+    inited: false,
+    scene: null,
+    camera: null,
+    renderer: null,
+    controls: null,
+    root: null,
+    gridGroup: null,
+    memberGroup: null,
+  };
+
+  const drCanvas = document.getElementById('drCanvas');
+  const drGridX = document.getElementById('drGridX');
+  const drGridY = document.getElementById('drGridY');
+  const drSpacingX = document.getElementById('drSpacingX');
+  const drSpacingY = document.getElementById('drSpacingY');
+  const drLevels = document.getElementById('drLevels');
+  const drAddLevel = document.getElementById('drAddLevel');
+  const drCopy = document.getElementById('drCopy');
+
+  const drColCount = document.getElementById('drColCount');
+  const drColLenM = document.getElementById('drColLenM');
+  const drBeamCount = document.getElementById('drBeamCount');
+  const drBeamLenM = document.getElementById('drBeamLenM');
+  const drTotalLenM = document.getElementById('drTotalLenM');
+
+  function mmToM(mm){ return mm / 1000; }
+
+  function getLevelHeightsMm(){
+    const inputs = [...(drLevels?.querySelectorAll('input[data-level]') || [])];
+    const vals = inputs.map(i => Math.max(0, parseFloat(i.value||'0')||0));
+    return vals;
+  }
+
+  function renderLevels(){
+    if(!drLevels) return;
+    const heights = getLevelHeightsMm();
+    if(heights.length === 0){
+      drLevels.innerHTML = '';
+      return;
+    }
+    // keep existing order/values
+    drLevels.innerHTML = '';
+    heights.forEach((h, idx)=>{
+      const row = document.createElement('div');
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '1fr auto';
+      row.style.gap = '10px';
+      row.style.alignItems = 'end';
+      row.innerHTML = `
+        <label style="margin:0">
+          <span>Level ${idx+1} 높이 (mm)</span>
+          <input data-level="${idx}" type="number" min="0" step="1" value="${h}" />
+        </label>
+        <button class="mini-btn" data-level-del="${idx}">삭제</button>
+      `;
+      drLevels.appendChild(row);
+    });
+  }
+
+  function initLevels(){
+    if(!drLevels) return;
+    // default levels
+    drLevels.innerHTML = `
+      <label><span>Level 1 높이 (mm)</span><input data-level="0" type="number" min="0" step="1" value="4200" /></label>
+      <label><span>Level 2 높이 (mm)</span><input data-level="1" type="number" min="0" step="1" value="4200" /></label>
+    `;
+
+    drAddLevel?.addEventListener('click', ()=>{
+      const hs = getLevelHeightsMm();
+      hs.push(4200);
+      // rebuild
+      drLevels.innerHTML = '';
+      hs.forEach((h, idx)=>{
+        const lab = document.createElement('label');
+        lab.innerHTML = `<span>Level ${idx+1} 높이 (mm)</span><input data-level="${idx}" type="number" min="0" step="1" value="${h}" />`;
+        drLevels.appendChild(lab);
+      });
+      // convert to rich rows
+      renderLevels();
+      rebuildDraft();
+    });
+
+    drLevels.addEventListener('input', (e)=>{
+      if(e.target && e.target.matches('input[data-level]')) rebuildDraft();
+    });
+
+    drLevels.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-level-del]');
+      if(!btn) return;
+      const idx = parseInt(btn.getAttribute('data-level-del'), 10);
+      const hs = getLevelHeightsMm().filter((_,i)=> i !== idx);
+      // rebuild
+      drLevels.innerHTML = '';
+      hs.forEach((h, i)=>{
+        const lab = document.createElement('label');
+        lab.innerHTML = `<span>Level ${i+1} 높이 (mm)</span><input data-level="${i}" type="number" min="0" step="1" value="${h}" />`;
+        drLevels.appendChild(lab);
+      });
+      renderLevels();
+      rebuildDraft();
+    });
+
+    renderLevels();
+  }
+
+  function initThree(){
+    if(dr.inited) return;
+    if(!drCanvas || !window.THREE) return;
+
+    const THREE = window.THREE;
+
+    dr.scene = new THREE.Scene();
+    dr.scene.background = new THREE.Color(0xffffff);
+
+    dr.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+    dr.camera.position.set(8, 8, 8);
+
+    dr.renderer = new THREE.WebGLRenderer({ antialias: true });
+    dr.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    drCanvas.innerHTML = '';
+    drCanvas.appendChild(dr.renderer.domElement);
+
+    const light1 = new THREE.DirectionalLight(0xffffff, 0.9);
+    light1.position.set(10, 20, 10);
+    dr.scene.add(light1);
+    dr.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+    dr.controls = new THREE.OrbitControls(dr.camera, dr.renderer.domElement);
+    dr.controls.enableDamping = true;
+
+    dr.root = new THREE.Group();
+    dr.scene.add(dr.root);
+
+    dr.gridGroup = new THREE.Group();
+    dr.memberGroup = new THREE.Group();
+    dr.root.add(dr.gridGroup);
+    dr.root.add(dr.memberGroup);
+
+    function resize(){
+      const rect = drCanvas.getBoundingClientRect();
+      const w = Math.max(10, rect.width);
+      const h = Math.max(10, rect.height);
+      dr.camera.aspect = w / h;
+      dr.camera.updateProjectionMatrix();
+      dr.renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function tick(){
+      requestAnimationFrame(tick);
+      dr.controls?.update();
+      dr.renderer.render(dr.scene, dr.camera);
+    }
+    tick();
+
+    dr.inited = true;
+  }
+
+  function clearGroup(g){
+    if(!g) return;
+    while(g.children.length){
+      const c = g.children.pop();
+      g.remove(c);
+    }
+  }
+
+  function calcDraft(){
+    const nx = Math.max(1, parseInt(drGridX?.value || '1', 10) || 1);
+    const ny = Math.max(1, parseInt(drGridY?.value || '1', 10) || 1);
+    const sx = Math.max(1, parseFloat(drSpacingX?.value || '1') || 1);
+    const sy = Math.max(1, parseFloat(drSpacingY?.value || '1') || 1);
+    const levels = getLevelHeightsMm().filter(v => v > 0);
+    const heightMm = levels.reduce((a,b)=>a+b,0);
+
+    const colCount = nx * ny;
+    const colLenMm = colCount * heightMm;
+
+    // beams at each level (excluding base at 0)
+    const beamLevels = levels.length;
+    const beamCountPerLevel = (ny * Math.max(0, nx-1)) + (nx * Math.max(0, ny-1));
+    const beamCount = beamLevels * beamCountPerLevel;
+
+    const beamLenPerLevelMm = (ny * Math.max(0, nx-1) * sx) + (nx * Math.max(0, ny-1) * sy);
+    const beamLenMm = beamLevels * beamLenPerLevelMm;
+
+    return { nx, ny, sx, sy, levels, heightMm, colCount, colLenMm, beamCount, beamLenMm };
+  }
+
+  function rebuildDraft(){
+    if(!drCanvas) return;
+    initThree();
+    const THREE = window.THREE;
+    if(!dr.inited || !THREE) return;
+
+    const d = calcDraft();
+
+    // stats
+    drColCount.textContent = String(d.colCount);
+    drColLenM.textContent = fmt(mmToM(d.colLenMm), 3);
+    drBeamCount.textContent = String(d.beamCount);
+    drBeamLenM.textContent = fmt(mmToM(d.beamLenMm), 3);
+    drTotalLenM.textContent = fmt(mmToM(d.colLenMm + d.beamLenMm), 3);
+
+    clearGroup(dr.gridGroup);
+    clearGroup(dr.memberGroup);
+
+    // center model
+    const sizeX = (d.nx-1) * d.sx;
+    const sizeY = (d.ny-1) * d.sy;
+    const cx = sizeX/2;
+    const cy = sizeY/2;
+
+    // grid lines (on base)
+    const gridMat = new THREE.LineBasicMaterial({ color: 0x3A6EA5, transparent: true, opacity: 0.35 });
+    const toV = (xmm, ymm, zmm)=> new THREE.Vector3(mmToM(xmm-cx), mmToM(zmm), mmToM(ymm-cy));
+
+    for(let ix=0; ix<d.nx; ix++){
+      const x = ix*d.sx;
+      const geom = new THREE.BufferGeometry().setFromPoints([toV(x,0,0), toV(x,sizeY,0)]);
+      dr.gridGroup.add(new THREE.Line(geom, gridMat));
+    }
+    for(let iy=0; iy<d.ny; iy++){
+      const y = iy*d.sy;
+      const geom = new THREE.BufferGeometry().setFromPoints([toV(0,y,0), toV(sizeX,y,0)]);
+      dr.gridGroup.add(new THREE.Line(geom, gridMat));
+    }
+
+    // members (simple box as placeholder)
+    const colMat = new THREE.MeshStandardMaterial({ color: 0x1F2A44, roughness: 0.8, metalness: 0.15 });
+    const beamMat = new THREE.MeshStandardMaterial({ color: 0x2E2E2E, roughness: 0.85, metalness: 0.05 });
+
+    const colW = mmToM(200); // 200mm schematic
+    const beamW = mmToM(180);
+    const beamH = mmToM(220);
+
+    // columns
+    const h = mmToM(d.heightMm);
+    const colGeom = new THREE.BoxGeometry(colW, h, colW);
+    for(let ix=0; ix<d.nx; ix++){
+      for(let iy=0; iy<d.ny; iy++){
+        const x = ix*d.sx;
+        const y = iy*d.sy;
+        const mesh = new THREE.Mesh(colGeom, colMat);
+        mesh.position.copy(toV(x,y, d.heightMm/2));
+        dr.memberGroup.add(mesh);
+      }
+    }
+
+    // beams per level
+    let zAcc = 0;
+    for(const lvl of d.levels){
+      zAcc += lvl;
+      const z = zAcc;
+
+      // X direction beams
+      for(let iy=0; iy<d.ny; iy++){
+        for(let ix=0; ix<d.nx-1; ix++){
+          const x0 = ix*d.sx;
+          const x1 = (ix+1)*d.sx;
+          const len = mmToM(x1-x0);
+          const geom = new THREE.BoxGeometry(len, beamH, beamW);
+          const mesh = new THREE.Mesh(geom, beamMat);
+          mesh.position.copy(toV((x0+x1)/2, iy*d.sy, z));
+          dr.memberGroup.add(mesh);
+        }
+      }
+
+      // Y direction beams
+      for(let ix=0; ix<d.nx; ix++){
+        for(let iy=0; iy<d.ny-1; iy++){
+          const y0 = iy*d.sy;
+          const y1 = (iy+1)*d.sy;
+          const len = mmToM(y1-y0);
+          const geom = new THREE.BoxGeometry(beamW, beamH, len);
+          const mesh = new THREE.Mesh(geom, beamMat);
+          mesh.position.copy(toV(ix*d.sx, (y0+y1)/2, z));
+          dr.memberGroup.add(mesh);
+        }
+      }
+    }
+
+    // frame camera
+    const radius = mmToM(Math.max(sizeX, sizeY, d.heightMm)) * 0.9 + 2;
+    dr.camera.position.set(radius, radius*0.85, radius);
+    dr.controls.target.set(0, mmToM(d.heightMm)*0.45, 0);
+    dr.controls.update();
+  }
+
+  async function copyDraftToClipboard(){
+    const d = calcDraft();
+    const lines = [];
+    lines.push(['type','count','total_length_m'].join('\t'));
+    lines.push(['COLUMN', String(d.colCount), String(mmToM(d.colLenMm))].join('\t'));
+    lines.push(['BEAM', String(d.beamCount), String(mmToM(d.beamLenMm))].join('\t'));
+    lines.push(['TOTAL', '', String(mmToM(d.colLenMm + d.beamLenMm))].join('\t'));
+    const tsv = lines.join('\n');
+    try{
+      await navigator.clipboard.writeText(tsv);
+      setMsg('DRAFT 물량(길이) 표를 클립보드에 복사했습니다. 엑셀에 붙여넣기 하세요.');
+      setTimeout(()=>compute(), 1400);
+    }catch(e){
+      setMsg('복사에 실패했습니다(브라우저 권한).');
+    }
+  }
+
+  function initDraftUI(){
+    if(!drCanvas) return;
+    initLevels();
+
+    [drGridX, drGridY, drSpacingX, drSpacingY].forEach(el=>{
+      el?.addEventListener('input', rebuildDraft);
+    });
+
+    drCopy?.addEventListener('click', copyDraftToClipboard);
+
+    // build once
+    rebuildDraft();
+  }
+
+  // When switching to draft view, ensure it is initialized.
+  // (router calls showView which sets body[data-view])
+  const _oldShowView = showView;
+  showView = function(view){
+    _oldShowView(view);
+    if(view === 'draft'){
+      // defer to allow DOM layout
+      setTimeout(()=>{
+        if(!dr.inited) initDraftUI();
+        else rebuildDraft();
+      }, 30);
+    }
+  };
+
+  // If the page loads directly into #draft
+  if(currentViewFromHash() === 'draft'){
+    setTimeout(()=>{ if(!dr.inited) initDraftUI(); else rebuildDraft(); }, 30);
+  }
+
   initSteelTool();
 })();
