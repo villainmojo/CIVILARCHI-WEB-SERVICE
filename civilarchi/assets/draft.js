@@ -1,5 +1,6 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import { OrbitControls } from 'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import { mergeGeometries } from 'https://esm.sh/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js';
 
 // STEEL STRUCTURE DRAFT (MVP)
 // Units: inputs are mm. Internals use meters for Three.js.
@@ -340,65 +341,61 @@ function renderQty(d) {
   const colLenM = mmToM(d.colLenMm);
   const beamLenM = mmToM(d.beamLenMm);
 
-  // Per-member load sum (overrides reflected)
-  let colLoadKgSum = 0;
-  let beamLoadKgSum = 0;
+  /** @type {Map<string, {cat:string, member:string, len:number, count:number, loadKg:number|null}>} */
+  const g = new Map();
+  const add = (cat, prof, lenM) => {
+    const member = prof?.name || prof?.sizeKey || '-';
+    const key = `${cat}|${member}`;
+    const cur = g.get(key) || { cat, member, len: 0, count: 0, loadKg: 0 };
+    cur.len += lenM;
+    cur.count += 1;
+    if (Number.isFinite(prof?.kgm)) cur.loadKg += prof.kgm * lenM;
+    g.set(key, cur);
+  };
 
-  // columns: each id C_ix_iy, length = heightMm
+  // columns (each)
   const colLenEachM = mmToM(d.heightMm);
-  for(let ix=0; ix<d.nx; ix++){
-    for(let iy=0; iy<d.ny; iy++){
+  for (let ix = 0; ix < d.nx; ix++) {
+    for (let iy = 0; iy < d.ny; iy++) {
       const id = `C_${ix}_${iy}`;
       const prof = effectiveProfile(d.profileCol, id);
-      if(Number.isFinite(prof.kgm)) colLoadKgSum += prof.kgm * colLenEachM;
+      add('기둥', prof, colLenEachM);
     }
   }
 
-  // beams: X beams BY/BX ids, length per span varies
-  for(const z of d.levelsMm){
-    for(let iy=0; iy<d.ny; iy++){
-      for(let ix=0; ix<d.nx-1; ix++){
+  // beams (each span)
+  for (const z of d.levelsMm) {
+    // X direction
+    for (let iy = 0; iy < d.ny; iy++) {
+      for (let ix = 0; ix < d.nx - 1; ix++) {
         const x0 = d.xPosMm[ix] || 0;
-        const x1 = d.xPosMm[ix+1] || 0;
-        const lenM = mmToM(x1-x0);
+        const x1 = d.xPosMm[ix + 1] || 0;
+        const lenM = mmToM(x1 - x0);
         const id = `BX_${z}_${iy}_${ix}`;
         const prof = effectiveProfile(d.profileBeam, id);
-        if(Number.isFinite(prof.kgm)) beamLoadKgSum += prof.kgm * lenM;
+        add('보', prof, lenM);
       }
     }
-    for(let ix=0; ix<d.nx; ix++){
-      for(let iy=0; iy<d.ny-1; iy++){
+    // Y direction
+    for (let ix = 0; ix < d.nx; ix++) {
+      for (let iy = 0; iy < d.ny - 1; iy++) {
         const y0 = d.yPosMm[iy] || 0;
-        const y1 = d.yPosMm[iy+1] || 0;
-        const lenM = mmToM(y1-y0);
+        const y1 = d.yPosMm[iy + 1] || 0;
+        const lenM = mmToM(y1 - y0);
         const id = `BY_${z}_${ix}_${iy}`;
         const prof = effectiveProfile(d.profileBeam, id);
-        if(Number.isFinite(prof.kgm)) beamLoadKgSum += prof.kgm * lenM;
+        add('보', prof, lenM);
       }
     }
   }
 
-  const colLoadKg = colLoadKgSum > 0 ? colLoadKgSum : null;
-  const beamLoadKg = beamLoadKgSum > 0 ? beamLoadKgSum : null;
-
-  const rows = [
-    { cat: '기둥', member: d.profileCol.name || d.profileCol.sizeKey || 'COLUMN', len: colLenM, count: d.colCount, loadKg: colLoadKg },
-    { cat: '보', member: d.profileBeam.name || d.profileBeam.sizeKey || 'BEAM', len: beamLenM, count: d.beamCount, loadKg: beamLoadKg },
-  ];
-
-  // Split rows by member type if profiles differ
-  const grouped = new Map();
-  for(const r of rows){
-    const key = `${r.cat}|${r.member}`;
-    const cur = grouped.get(key) || { ...r, len:0, count:0, loadKg:0 };
-    cur.len += r.len;
-    cur.count += r.count;
-    cur.loadKg += (r.loadKg || 0);
-    grouped.set(key, cur);
-  }
+  const rows = [...g.values()].map(r => ({
+    ...r,
+    loadKg: (r.loadKg && r.loadKg > 0) ? r.loadKg : null,
+  }));
 
   rowsEl.innerHTML = '';
-  for (const r of grouped.values()) {
+  for (const r of rows) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${r.cat}</td>
@@ -457,6 +454,46 @@ function rebuild() {
     return { H: parseFloat(m[1]), B: parseFloat(m[2]), tf: parseFloat(m[3]), tw: parseFloat(m[4]) };
   }
 
+  function makeHGeomForBeamX(lenM, dimMm){
+    const B = mmToM(dimMm.B);
+    const H = mmToM(dimMm.H);
+    const tf = mmToM(dimMm.tf);
+    const tw = mmToM(dimMm.tw);
+
+    const top = new THREE.BoxGeometry(lenM, tf, B);
+    top.translate(0, (H/2 - tf/2), 0);
+    const bot = new THREE.BoxGeometry(lenM, tf, B);
+    bot.translate(0, (-H/2 + tf/2), 0);
+    const web = new THREE.BoxGeometry(lenM, Math.max(0.001, H - 2*tf), Math.max(0.001, tw));
+    web.translate(0, 0, 0);
+
+    return mergeGeometries([top, bot, web], false);
+  }
+
+  function makeHGeomForBeamY(lenM, dimMm){
+    const g = makeHGeomForBeamX(lenM, dimMm);
+    // rotate so length goes to Z, flange width to X
+    g.rotateY(Math.PI / 2);
+    return g;
+  }
+
+  function makeHGeomForColumn(heightM, dimMm){
+    const B = mmToM(dimMm.B);
+    const H = mmToM(dimMm.H);
+    const tf = mmToM(dimMm.tf);
+    const tw = mmToM(dimMm.tw);
+
+    // Extrude along Y (vertical)
+    const top = new THREE.BoxGeometry(B, heightM, tf);
+    top.translate(0, 0, (H/2 - tf/2));
+    const bot = new THREE.BoxGeometry(B, heightM, tf);
+    bot.translate(0, 0, (-H/2 + tf/2));
+    const web = new THREE.BoxGeometry(Math.max(0.001, tw), heightM, Math.max(0.001, H - 2*tf));
+    web.translate(0, 0, 0);
+
+    return mergeGeometries([top, bot, web], false);
+  }
+
   // materials (gray + selected)
   if(!state.matGray) state.matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
   if(!state.matSelected) state.matSelected = new THREE.MeshStandardMaterial({ color: 0x3A6EA5, roughness: 0.75, metalness: 0.10, emissive: 0x0b2a4a, emissiveIntensity: 0.25 });
@@ -481,11 +518,13 @@ function rebuild() {
       const x = d.xPosMm[ix] || 0;
       const y = d.yPosMm[iy] || 0;
       const id = `C_${ix}_${iy}`;
-      const prof = effectiveProfile('col', id);
+      const prof = effectiveProfile(d.profileCol, id);
       const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
       const b = mmToM(dim?.B ?? (colHdim?.B ?? 200));
       const dd = mmToM(dim?.H ?? (colHdim?.H ?? 200));
-      const geom = new THREE.BoxGeometry(b, h || 0.001, dd);
+      const geom = (dim && prof.shapeKey==='H')
+        ? makeHGeomForColumn(h || 0.001, dim)
+        : new THREE.BoxGeometry(b, h || 0.001, dd);
       const mesh = new THREE.Mesh(geom, state.matGray);
       mesh.userData = { id, role: 'col', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
       mesh.position.copy(toV(x, y, d.heightMm / 2));
@@ -502,11 +541,13 @@ function rebuild() {
         const x1 = d.xPosMm[ix+1] || 0;
         const len = mmToM(x1 - x0);
         const id = `BX_${z}_${iy}_${ix}`;
-        const prof = effectiveProfile('beam', id);
+        const prof = effectiveProfile(d.profileBeam, id);
         const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
         const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
         const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
-        const geom = new THREE.BoxGeometry(len || 0.001, dd, b);
+        const geom = (dim && prof.shapeKey==='H')
+          ? makeHGeomForBeamX(len || 0.001, dim)
+          : new THREE.BoxGeometry(len || 0.001, dd, b);
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const y = d.yPosMm[iy] || 0;
@@ -523,11 +564,13 @@ function rebuild() {
         const y1 = d.yPosMm[iy+1] || 0;
         const len = mmToM(y1 - y0);
         const id = `BY_${z}_${ix}_${iy}`;
-        const prof = effectiveProfile('beam', id);
+        const prof = effectiveProfile(d.profileBeam, id);
         const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
         const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
         const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
-        const geom = new THREE.BoxGeometry(b, dd, len || 0.001);
+        const geom = (dim && prof.shapeKey==='H')
+          ? makeHGeomForBeamY(len || 0.001, dim)
+          : new THREE.BoxGeometry(b, dd, len || 0.001);
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const x = d.xPosMm[ix] || 0;
