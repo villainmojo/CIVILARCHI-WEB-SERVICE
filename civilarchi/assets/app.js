@@ -404,16 +404,34 @@
 
   // When switching to draft view, tell the module to (re)render.
   const _oldShowView = showView;
+  function ensureDraftModule(){
+    if(window.__civilarchiDraftLoaded) return;
+    // Some clients may have cached HTML that referenced an older draft script.
+    // Dynamically load the latest module as a fallback.
+    const existing = document.querySelector('script[data-civilarchi-draft]');
+    if(existing) return;
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = '/civilarchi/assets/draft.js?v=20260205_0256';
+    s.setAttribute('data-civilarchi-draft','1');
+    s.onload = ()=>{ window.__civilarchiDraftLoaded = true; };
+    document.body.appendChild(s);
+  }
+
   showView = function(view){
     _oldShowView(view);
     if(view === 'draft'){
+      ensureDraftModule();
       window.dispatchEvent(new Event('civilarchi:draft:show'));
     }
   };
 
   // If the page loads directly into #draft
   if(currentViewFromHash() === 'draft'){
-    setTimeout(()=>window.dispatchEvent(new Event('civilarchi:draft:show')), 30);
+    setTimeout(()=>{
+      ensureDraftModule();
+      window.dispatchEvent(new Event('civilarchi:draft:show'));
+    }, 30);
   }
 
   // Simple toast bridge for module scripts
