@@ -93,7 +93,12 @@
   const hbTotal = document.getElementById('hbTotal');
   const hbTotalTon = document.getElementById('hbTotalTon');
   const hbMsg = document.getElementById('hbMsg');
+  const hbAdd = document.getElementById('hbAdd');
   const hbCopy = document.getElementById('hbCopy');
+
+  const sumRowsEl = document.getElementById('sumRows');
+  const sumKgEl = document.getElementById('sumKg');
+  const sumTonEl = document.getElementById('sumTon');
 
   function fmt(n, digits=3){
     if(n == null || !Number.isFinite(n)) return '-';
@@ -176,6 +181,87 @@
     });
   }
 
+  // ------------------------
+  // Sum list
+  // ------------------------
+  /** @type {Array<{id:string,stdKey:string,shapeKey:string,sizeKey:string,name:string,kgm:number,length:number}>} */
+  const sumList = [];
+
+  function recalcSum(){
+    if(!sumKgEl || !sumTonEl) return;
+    let kg = 0;
+    for(const it of sumList){
+      if(Number.isFinite(it.kgm) && Number.isFinite(it.length)) kg += it.kgm * it.length;
+    }
+    sumKgEl.textContent = fmt(kg, 3);
+    sumTonEl.textContent = fmt(kg/1000, 6);
+  }
+
+  function renderSum(){
+    if(!sumRowsEl) return;
+    sumRowsEl.innerHTML = '';
+
+    for(const it of sumList){
+      const tr = document.createElement('tr');
+      const totalKg = it.kgm * it.length;
+      const totalTon = totalKg / 1000;
+
+      tr.innerHTML = `
+        <td>${STD_LABEL[it.stdKey] || it.stdKey}</td>
+        <td>${SHAPE_LABEL[it.shapeKey] || it.shapeKey}</td>
+        <td class="mono">${it.name}</td>
+        <td class="right mono">${fmt(it.kgm, 3)}</td>
+        <td class="right">
+          <input class="sum-len" type="number" inputmode="decimal" min="0" step="0.1" value="${it.length}" data-id="${it.id}" />
+        </td>
+        <td class="right mono">${fmt(totalKg, 3)}</td>
+        <td class="right mono">${fmt(totalTon, 6)}</td>
+        <td class="right"><button class="mini-btn" data-sum-remove="${it.id}">삭제</button></td>
+      `;
+
+      sumRowsEl.appendChild(tr);
+    }
+
+    recalcSum();
+  }
+
+  function addToSum(){
+    const L = Math.max(0, parseFloat(hbLength?.value || '0') || 0);
+    const useCustom = !!hbUseCustom?.checked;
+    const { stdKey, shapeKey, item } = getSelected();
+
+    let kgm = null;
+    if(useCustom){
+      kgm = parseFloat(hbCustomKgm?.value || '');
+      if(!Number.isFinite(kgm)) kgm = null;
+    } else {
+      kgm = item?.kgm ?? null;
+    }
+
+    if(!stdKey || !shapeKey || !item?.key){
+      setMsg('합산 추가 실패: 선택값이 비어있습니다.');
+      return;
+    }
+    if(kgm == null){
+      setMsg('합산 추가 실패: kg/m 값을 찾지 못했습니다.');
+      return;
+    }
+
+    sumList.push({
+      id: Math.random().toString(16).slice(2) + Date.now().toString(16),
+      stdKey,
+      shapeKey,
+      sizeKey: item.key,
+      name: item.name,
+      kgm,
+      length: L,
+    });
+
+    setMsg('합산에 추가했습니다.');
+    renderSum();
+    setTimeout(()=>compute(), 900);
+  }
+
   function compute(){
     if(!hbKgm || !hbTotal || !hbTotalTon) return;
 
@@ -237,10 +323,35 @@
 
     hbCustomKgm.addEventListener('input', compute);
 
+    hbAdd?.addEventListener('click', addToSum);
+
+    // Sum interactions (length edit / remove)
+    sumRowsEl?.addEventListener('input', (e)=>{
+      const inp = e.target.closest('input.sum-len');
+      if(!inp) return;
+      const id = inp.getAttribute('data-id');
+      const v = Math.max(0, parseFloat(inp.value || '0') || 0);
+      const it = sumList.find(x => x.id === id);
+      if(!it) return;
+      it.length = v;
+      renderSum();
+    });
+
+    sumRowsEl?.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-sum-remove]');
+      if(!btn) return;
+      const id = btn.getAttribute('data-sum-remove');
+      const idx = sumList.findIndex(x => x.id === id);
+      if(idx >= 0){
+        sumList.splice(idx,1);
+        renderSum();
+      }
+    });
+
     hbCopy?.addEventListener('click', async ()=>{
       const { stdKey, shapeKey, item } = getSelected();
       const L = Math.max(0, parseFloat(hbLength?.value || '0') || 0);
-      const text = `CIVILARCHI 단위중량 계산\n- standard: ${stdKey || '-'}\n- shape: ${shapeKey || '-'}\n- size: ${item?.key || '-'}\n- length(m): ${L}\n- kg/m: ${hbKgm.textContent}\n- total(kg): ${hbTotal.textContent}\n- total(ton): ${hbTotalTon.textContent}`;
+      const text = `CIVILARCHI STEEL MEMBER 하중 계산\n- standard: ${stdKey || '-'}\n- shape: ${shapeKey || '-'}\n- size: ${item?.key || '-'}\n- length(m): ${L}\n- kg/m: ${hbKgm.textContent}\n- total(kg): ${hbTotal.textContent}\n- total(ton): ${hbTotalTon.textContent}\n\n[SUM]\n- sum(kg): ${sumKgEl?.textContent || '-'}\n- sum(ton): ${sumTonEl?.textContent || '-'}`;
       try{
         await navigator.clipboard.writeText(text);
         setMsg('클립보드에 복사했습니다.');

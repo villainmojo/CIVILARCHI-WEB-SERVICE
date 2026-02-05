@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0216" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0221" />
 </head>
 <body>
   <header class="top">
@@ -30,7 +30,7 @@
     <div class="app">
       <aside class="sidebar">
         <div class="sb-title">기능</div>
-        <a class="sb-item" href="#hbeam" data-view="hbeam">단위중량 계산</a>
+        <a class="sb-item" href="#hbeam" data-view="hbeam">STEEL MEMBER 하중 계산기</a>
 
         <div class="sb-title">시스템</div>
         <div class="sb-box">
@@ -65,7 +65,7 @@
                   <button class="quick-card" data-goto="hbeam">
                     <div class="qc-top">
                       <div class="qc-icon">Σ</div>
-                      <div class="qc-name">단위중량 계산</div>
+                      <div class="qc-name">STEEL MEMBER 하중 계산기</div>
                     </div>
                     <div class="qc-desc">KS/JIS · 형강/강관/앵글 등 · kg/m → kg, ton</div>
                   </button>
@@ -101,8 +101,8 @@
         <section class="view" data-view="hbeam" hidden>
           <div class="pagehead">
             <div>
-              <h1>각 국가 규격 H-beam 중량 계산</h1>
-              <p class="muted">선택한 규격의 <b>단위중량(kg/m)</b> × 길이(m) = 총 중량(kg)</p>
+              <h1>STEEL MEMBER 하중 계산기</h1>
+              <p class="muted">단위중량(kg/m) × 길이(m) = 하중(kg, ton) · 합산 가능</p>
             </div>
             <div class="page-actions">
               <button class="btn" data-goto="home">홈으로</button>
@@ -172,7 +172,38 @@
               </div>
 
               <div class="btns" style="margin-top:12px">
+                <button class="btn" id="hbAdd">합산 추가</button>
                 <button class="btn primary" id="hbCopy">결과 복사</button>
+              </div>
+
+              <div class="sum" style="margin-top:14px">
+                <div class="sum-head">
+                  <h3>합산</h3>
+                  <div class="sum-totals">
+                    <span class="badge ok"><span class="mono" id="sumKg">-</span>&nbsp;kg</span>
+                    <span class="badge"><span class="mono" id="sumTon">-</span>&nbsp;ton</span>
+                  </div>
+                </div>
+
+                <div class="sum-table-wrap">
+                  <table class="sum-table">
+                    <thead>
+                      <tr>
+                        <th>규격</th>
+                        <th>종류</th>
+                        <th>사이즈</th>
+                        <th class="right">kg/m</th>
+                        <th class="right">길이(m)</th>
+                        <th class="right">kg</th>
+                        <th class="right">ton</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="sumRows"></tbody>
+                  </table>
+                </div>
+
+                <div class="hint">합산 행의 길이를 수정하면 합계가 실시간으로 갱신됩니다.</div>
               </div>
             </article>
           </div>
@@ -186,6 +217,6 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0216"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0221"></script>
 </body>
 </html>
