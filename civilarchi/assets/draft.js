@@ -57,6 +57,7 @@ const els = {
   qtySumCount: () => document.getElementById('drQtySumCount'),
   qtySumLen: () => document.getElementById('drQtySumLen'),
   qtySumLoad: () => document.getElementById('drQtySumLoad'),
+  qtySumTop: () => document.getElementById('drQtySumTop'),
 };
 
 const state = {
@@ -409,11 +410,14 @@ function renderQty(d) {
 
   const sumCount = d.colCount + d.beamCount;
   const sumLen = colLenM + beamLenM;
-  const sumLoad = ((colLoadKg ?? 0) + (beamLoadKg ?? 0)) || null;
+  const sumLoad = rows.reduce((acc, r) => acc + (Number.isFinite(r.loadKg) ? r.loadKg : 0), 0) || null;
 
   els.qtySumCount().textContent = fmt(sumCount, 0);
   els.qtySumLen().textContent = fmt(sumLen, 3);
   els.qtySumLoad().textContent = fmtLoadKgTon(sumLoad);
+
+  const top = els.qtySumTop();
+  if(top) top.textContent = `전체 물량 합산 무게: ${fmtLoadKgTon(sumLoad)}`;
 }
 
 function rebuild() {
