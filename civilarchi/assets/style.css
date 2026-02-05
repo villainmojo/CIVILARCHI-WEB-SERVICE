@@ -226,8 +226,11 @@ label.inline input{width:auto}
 .draft-canvas-wrap{width:100%; position:relative}
 .draft-canvas{height: 480px; background: #fff; border:1px solid rgba(31,42,68,0.14); border-radius: calc(var(--radius) + 8px); box-shadow: var(--shadow); overflow:hidden}
 
-.draft-topbar{display:flex; gap:16px; margin-top:8px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap}
+.draft-topbar{display:grid; grid-template-columns: 1fr 520px; gap:16px; margin-top:8px; align-items:start}
 .draft-topopts{display:flex; gap:14px; align-items:center; flex-wrap:wrap}
+@media (max-width: 1100px){
+  .draft-topbar{grid-template-columns: 1fr;}
+}
 .ck{display:inline-flex; gap:8px; align-items:center; font-weight:700; color: rgba(31,42,68,0.85)}
 .ck input{width:16px; height:16px}
 
@@ -236,8 +239,9 @@ label.inline input{width:auto}
   border: 1px solid rgba(31,42,68,0.14);
   border-radius: 14px;
   background: rgba(255,255,255,0.65);
-  min-width: 520px;
+  width: 520px;
   max-width: 100%;
+  justify-self: end;
 }
 
 .ov-split{display:flex; gap:12px; align-items:flex-start}
