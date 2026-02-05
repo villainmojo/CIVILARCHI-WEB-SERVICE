@@ -6,11 +6,11 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0205" />
 </head>
 <body>
   <header class="top">
-    <div class="container">
+    <div class="container top-inner">
       <div class="brand">
         <div class="logo">CA</div>
         <div>
@@ -27,46 +27,133 @@
   </header>
 
   <main class="container">
-    <section class="hero">
-      <h1>토목·건축 엔지니어용 웹페이지</h1>
-      <p class="muted">
-        이 페이지는 <code>/civilarchi/</code> 경로로 독립 배포됩니다. (DB 없음)
-      </p>
-      <div class="cards">
-        <article class="card">
-          <h2>프로젝트 목표</h2>
-          <ul>
-            <li>현장/사무에서 바로 쓰는 작은 계산·체크 도구</li>
-            <li>표준/기준/참고 링크 정리</li>
-            <li>업데이트는 항상 Git 기록 + 배포 스냅샷 남기기</li>
-          </ul>
-        </article>
-        <article class="card">
-          <h2>상태</h2>
-          <p>
-            <span id="status">로딩 중…</span>
-          </p>
-          <p class="muted small">
-            build: <span id="build"></span>
-          </p>
-        </article>
-      </div>
-    </section>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="sb-title">기능</div>
+        <a class="sb-item active" href="#home" data-view="home">홈</a>
+        <a class="sb-item" href="#hbeam" data-view="hbeam">H-beam 중량(kg/m)</a>
 
-    <section class="section">
-      <h2>다음 작업</h2>
-      <ol>
-        <li>필수 메뉴/섹션 구성 확정</li>
-        <li>첫 번째 도구 1개 추가 (예: 단위 변환 / 철근 중량 / 토공량 메모 등)</li>
-        <li>배포 자동 로그 확인</li>
-      </ol>
-    </section>
+        <div class="sb-title">시스템</div>
+        <div class="sb-box">
+          <div class="row">
+            <div class="label">상태</div>
+            <div id="status" class="badge ok">로딩 중…</div>
+          </div>
+          <div class="row">
+            <div class="label">build</div>
+            <div id="build" class="mono small"></div>
+          </div>
+        </div>
+      </aside>
 
-    <footer class="footer">
-      <div class="muted small">© SENGVIS · CIVILARCHI</div>
-    </footer>
+      <section class="content">
+        <!-- HOME VIEW -->
+        <section class="view" data-view="home">
+          <div class="hero">
+            <h1>토목·건축 엔지니어용 웹페이지</h1>
+            <p class="muted">
+              이 프로젝트는 <code>/civilarchi/</code> 경로로 독립 배포됩니다. (DB 없음)
+            </p>
+          </div>
+
+          <div class="cards">
+            <article class="card">
+              <h2>빠른 실행</h2>
+              <div class="btns">
+                <button class="btn primary" data-goto="hbeam">H-beam 중량 계산</button>
+              </div>
+              <p class="muted small">홈 화면은 기능 버튼을 배치하는 허브로 사용합니다.</p>
+            </article>
+
+            <article class="card">
+              <h2>디자인 원칙</h2>
+              <ul>
+                <li>채도 낮게(신뢰/구조/안정)</li>
+                <li>색은 ‘상태 전달’에만 사용 (PASS/WARN/FAIL)</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <!-- HBEAM VIEW -->
+        <section class="view" data-view="hbeam" hidden>
+          <div class="pagehead">
+            <div>
+              <h1>각 국가 규격 H-beam 중량 계산</h1>
+              <p class="muted">선택한 규격의 <b>단위중량(kg/m)</b> × 길이(m) = 총 중량(kg)</p>
+            </div>
+            <div class="page-actions">
+              <button class="btn" data-goto="home">홈으로</button>
+            </div>
+          </div>
+
+          <div class="cards">
+            <article class="card">
+              <h2>입력</h2>
+              <div class="form">
+                <label>
+                  <span>국가/규격</span>
+                  <select id="hbStandard"></select>
+                </label>
+
+                <label>
+                  <span>단면(사이즈)</span>
+                  <select id="hbSize"></select>
+                </label>
+
+                <label>
+                  <span>길이 (m)</span>
+                  <input id="hbLength" type="number" inputmode="decimal" min="0" step="0.1" value="6" />
+                </label>
+
+                <div class="row-inline">
+                  <label class="inline">
+                    <input id="hbUseCustom" type="checkbox" />
+                    <span>사용자 직접 입력(kg/m)</span>
+                  </label>
+                </div>
+
+                <label id="hbCustomWrap" hidden>
+                  <span>단위중량 (kg/m)</span>
+                  <input id="hbCustomKgm" type="number" inputmode="decimal" min="0" step="0.001" placeholder="예: 94.0" />
+                  <div class="hint">표/규격 값이 없을 때 임시로 사용합니다.</div>
+                </label>
+
+                <div class="hint">
+                  주의: 현재는 계산 UI/구조를 먼저 구축했습니다. 규격 테이블(kg/m)은 국가별로 정확한 표를 받아서 확장하는 방식이 안전합니다.
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <h2>결과</h2>
+              <div class="result">
+                <div class="kv">
+                  <div class="k">단위중량</div>
+                  <div class="v"><span id="hbKgm" class="mono">-</span> <span class="muted">kg/m</span></div>
+                </div>
+                <div class="kv">
+                  <div class="k">총 중량</div>
+                  <div class="v"><span id="hbTotal" class="mono">-</span> <span class="muted">kg</span></div>
+                </div>
+
+                <div id="hbMsg" class="notice" hidden></div>
+              </div>
+
+              <div class="btns" style="margin-top:12px">
+                <button class="btn primary" id="hbCopy">결과 복사</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <div class="muted small">© SENGVIS · CIVILARCHI</div>
+        </footer>
+      </section>
+    </div>
   </main>
 
-  <script src="/civilarchi/assets/app.js?v=20260205"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0205"></script>
 </body>
 </html>
