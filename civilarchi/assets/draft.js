@@ -142,9 +142,9 @@ function calc() {
 }
 
 function ensureThree() {
-  if (state.inited) return;
+  if (state.inited) return true;
   const canvasWrap = els.canvas();
-  if (!canvasWrap) return;
+  if (!canvasWrap) return false;
 
   state.scene = new THREE.Scene();
   state.scene.background = new THREE.Color(0xffffff);
@@ -152,11 +152,16 @@ function ensureThree() {
   state.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
   state.camera.position.set(8, 8, 8);
 
-  state.renderer = new THREE.WebGLRenderer({ antialias: true });
-  state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  try{
+    state.renderer = new THREE.WebGLRenderer({ antialias: true });
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
-  canvasWrap.innerHTML = '';
-  canvasWrap.appendChild(state.renderer.domElement);
+    canvasWrap.innerHTML = '';
+    canvasWrap.appendChild(state.renderer.domElement);
+  } catch(e){
+    canvasWrap.innerHTML = '<div style="padding:14px; color: rgba(46,46,46,0.75)">WebGL을 초기화하지 못했습니다. (브라우저/그래픽 설정 확인)</div>';
+    return false;
+  }
 
   const light1 = new THREE.DirectionalLight(0xffffff, 0.9);
   light1.position.set(10, 20, 10);
@@ -194,6 +199,7 @@ function ensureThree() {
   tick();
 
   state.inited = true;
+  return true;
 }
 
 function renderQty(d) {
@@ -230,11 +236,11 @@ function renderQty(d) {
 }
 
 function rebuild() {
-  ensureThree();
-  if (!state.inited) return;
-
   const d = calc();
   renderQty(d);
+
+  const ok = ensureThree();
+  if (!ok || !state.inited) return;
 
   clearGroup(state.gridGroup);
   clearGroup(state.memberGroup);
