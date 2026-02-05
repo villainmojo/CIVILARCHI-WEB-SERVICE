@@ -4,6 +4,9 @@ import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/cont
 // STEEL STRUCTURE DRAFT (MVP)
 // Units: inputs are mm. Internals use meters for Three.js.
 
+// Debug hook: lets app.js detect module executed
+window.__civilarchiDraftModuleExecuted = (window.__civilarchiDraftModuleExecuted || 0) + 1;
+
 const mmToM = (mm) => mm / 1000;
 const clampNum = (v, min = 0) => {
   const n = parseFloat(v);
@@ -357,5 +360,15 @@ function show() {
 
 window.addEventListener('civilarchi:draft:show', show);
 
+function maybeAutoShow(){
+  try{
+    if((location.hash || '') === '#draft') show();
+  }catch(_e){}
+}
+
 // If loaded directly in #draft
-if ((location.hash || '') === '#draft') show();
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', maybeAutoShow, { once: true });
+} else {
+  maybeAutoShow();
+}

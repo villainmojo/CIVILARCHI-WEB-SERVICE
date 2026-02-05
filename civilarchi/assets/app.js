@@ -412,7 +412,7 @@
     if(existing) return;
     const s = document.createElement('script');
     s.type = 'module';
-    s.src = '/civilarchi/assets/draft.js?v=20260205_0256';
+    s.src = '/civilarchi/assets/draft.js?v=20260205_0302';
     s.setAttribute('data-civilarchi-draft','1');
     s.onload = ()=>{ window.__civilarchiDraftLoaded = true; };
     document.body.appendChild(s);
