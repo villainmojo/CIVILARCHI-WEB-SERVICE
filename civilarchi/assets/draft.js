@@ -30,8 +30,16 @@ const els = {
   gridY: () => document.getElementById('drGridY'),
   spacingX: () => document.getElementById('drSpacingX'),
   spacingY: () => document.getElementById('drSpacingY'),
+  spansX: () => document.getElementById('drSpansX'),
+  spansY: () => document.getElementById('drSpansY'),
+
   levels: () => document.getElementById('drLevels'),
   addLevel: () => document.getElementById('drAddLevel'),
+
+  std: () => document.getElementById('drStd'),
+  shape: () => document.getElementById('drShape'),
+  size: () => document.getElementById('drSize'),
+
   copy: () => document.getElementById('drCopy'),
 
   qtyRows: () => document.getElementById('drQtyRows'),
@@ -60,11 +68,14 @@ function clearGroup(g) {
   }
 }
 
-function getLevelHeightsMm() {
+function getLevelElevationsMm() {
   const wrap = els.levels();
   if (!wrap) return [];
   const inputs = [...wrap.querySelectorAll('input[data-level]')];
-  return inputs.map((i) => clampNum(i.value, 0));
+  return inputs
+    .map((i) => clampNum(i.value, 0))
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b);
 }
 
 function renderLevels(rows) {
@@ -93,14 +104,15 @@ function initLevels() {
   const wrap = els.levels();
   if (!wrap) return;
 
-  // default 2 levels if empty
+  // default 2 levels if empty (absolute elevations)
   if (wrap.querySelectorAll('input[data-level]').length === 0) {
-    renderLevels([4200, 4200]);
+    renderLevels([4200, 8400]);
   }
 
   els.addLevel()?.addEventListener('click', () => {
-    const hs = getLevelHeightsMm();
-    hs.push(4200);
+    const hs = getLevelElevationsMm();
+    const last = hs.length ? hs[hs.length - 1] : 0;
+    hs.push(last + 4200);
     renderLevels(hs);
     rebuild();
   });
@@ -113,32 +125,72 @@ function initLevels() {
     const btn = e.target.closest('[data-level-del]');
     if (!btn) return;
     const idx = clampInt(btn.getAttribute('data-level-del'), 0);
-    const hs = getLevelHeightsMm().filter((_, i) => i !== idx);
+    const hs = getLevelElevationsMm().filter((_, i) => i !== idx);
     renderLevels(hs);
     rebuild();
   });
 }
 
+function parseSpans(text){
+  if(!text) return [];
+  return text
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => clampNum(s, 1));
+}
+
+function cumulativePos(spans){
+  const pos=[0];
+  for(const s of spans) pos.push(pos[pos.length-1] + s);
+  return pos;
+}
+
+function getProfile(){
+  const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+  const stdKey = els.std()?.value || 'KS';
+  const shapeKey = els.shape()?.value || 'H';
+  const sizeKey = els.size()?.value || '';
+  const item = data?.[stdKey]?.shapes?.[shapeKey]?.items?.find(it => it.key === sizeKey) || null;
+  return { stdKey, shapeKey, sizeKey, item, kgm: item?.kgm ?? null, name: item?.name ?? '' };
+}
+
 function calc() {
-  const nx = clampInt(els.gridX()?.value ?? 1, 1);
-  const ny = clampInt(els.gridY()?.value ?? 1, 1);
+  let nx = clampInt(els.gridX()?.value ?? 1, 1);
+  let ny = clampInt(els.gridY()?.value ?? 1, 1);
   const sx = clampNum(els.spacingX()?.value ?? 1, 1);
   const sy = clampNum(els.spacingY()?.value ?? 1, 1);
 
-  const levels = getLevelHeightsMm().filter((v) => v > 0);
-  const heightMm = levels.reduce((a, b) => a + b, 0);
+  let spansX = parseSpans(els.spansX()?.value || '');
+  let spansY = parseSpans(els.spansY()?.value || '');
+
+  if(spansX.length){ nx = spansX.length + 1; if(els.gridX()) els.gridX().value = String(nx); }
+  else spansX = Array.from({length: Math.max(0,nx-1)}, () => sx);
+
+  if(spansY.length){ ny = spansY.length + 1; if(els.gridY()) els.gridY().value = String(ny); }
+  else spansY = Array.from({length: Math.max(0,ny-1)}, () => sy);
+
+  const xPosMm = cumulativePos(spansX);
+  const yPosMm = cumulativePos(spansY);
+
+  const levelsMm = getLevelElevationsMm();
+  const heightMm = levelsMm.length ? levelsMm[levelsMm.length - 1] : 0;
 
   const colCount = nx * ny;
   const colLenMm = colCount * heightMm;
 
-  const beamLevels = levels.length;
+  const beamLevels = levelsMm.length;
   const beamCountPerLevel = (ny * Math.max(0, nx - 1)) + (nx * Math.max(0, ny - 1));
   const beamCount = beamLevels * beamCountPerLevel;
 
-  const beamLenPerLevelMm = (ny * Math.max(0, nx - 1) * sx) + (nx * Math.max(0, ny - 1) * sy);
+  const sumX = spansX.reduce((a,b)=>a+b,0);
+  const sumY = spansY.reduce((a,b)=>a+b,0);
+  const beamLenPerLevelMm = (ny * sumX) + (nx * sumY);
   const beamLenMm = beamLevels * beamLenPerLevelMm;
 
-  return { nx, ny, sx, sy, levels, heightMm, colCount, colLenMm, beamCount, beamLenMm };
+  const profile = getProfile();
+
+  return { nx, ny, spansX, spansY, xPosMm, yPosMm, levelsMm, heightMm, colCount, colLenMm, beamCount, beamLenMm, profile };
 }
 
 function ensureThree() {
@@ -202,6 +254,12 @@ function ensureThree() {
   return true;
 }
 
+function fmtLoadKgTon(kg){
+  if(kg == null || !Number.isFinite(kg)) return '-';
+  const ton = kg/1000;
+  return `${fmt(kg,3)} kg (${fmt(ton,6)} t)`;
+}
+
 function renderQty(d) {
   const rowsEl = els.qtyRows();
   if (!rowsEl) return;
@@ -209,9 +267,13 @@ function renderQty(d) {
   const colLenM = mmToM(d.colLenMm);
   const beamLenM = mmToM(d.beamLenMm);
 
+  const kgm = (d.profile && Number.isFinite(d.profile.kgm)) ? d.profile.kgm : null;
+  const colLoadKg = (kgm != null) ? (colLenM * kgm) : null;
+  const beamLoadKg = (kgm != null) ? (beamLenM * kgm) : null;
+
   const rows = [
-    { cat: '기둥', member: 'COLUMN', len: colLenM, count: d.colCount, load: null },
-    { cat: '보', member: 'BEAM', len: beamLenM, count: d.beamCount, load: null },
+    { cat: '기둥', member: d.profile.name || d.profile.sizeKey || 'COLUMN', len: colLenM, count: d.colCount, loadKg: colLoadKg },
+    { cat: '보', member: d.profile.name || d.profile.sizeKey || 'BEAM', len: beamLenM, count: d.beamCount, loadKg: beamLoadKg },
   ];
 
   rowsEl.innerHTML = '';
@@ -222,17 +284,18 @@ function renderQty(d) {
       <td class="mono">${r.member}</td>
       <td class="right mono">${fmt(r.len, 3)}</td>
       <td class="right mono">${fmt(r.count, 0)}</td>
-      <td class="right mono">${r.load == null ? '-' : fmt(r.load, 3)}</td>
+      <td class="right mono">${fmtLoadKgTon(r.loadKg)}</td>
     `;
     rowsEl.appendChild(tr);
   }
 
   const sumCount = d.colCount + d.beamCount;
   const sumLen = colLenM + beamLenM;
+  const sumLoad = (kgm != null) ? ((sumLen * kgm)) : null;
 
   els.qtySumCount().textContent = fmt(sumCount, 0);
   els.qtySumLen().textContent = fmt(sumLen, 3);
-  els.qtySumLoad().textContent = '-';
+  els.qtySumLoad().textContent = fmtLoadKgTon(sumLoad);
 }
 
 function rebuild() {
@@ -246,8 +309,8 @@ function rebuild() {
   clearGroup(state.memberGroup);
 
   // center model
-  const sizeX = (d.nx - 1) * d.sx;
-  const sizeY = (d.ny - 1) * d.sy;
+  const sizeX = d.xPosMm[d.xPosMm.length-1] || 0;
+  const sizeY = d.yPosMm[d.yPosMm.length-1] || 0;
   const cx = sizeX / 2;
   const cy = sizeY / 2;
 
@@ -256,12 +319,12 @@ function rebuild() {
   // grid lines (base)
   const gridMat = new THREE.LineBasicMaterial({ color: 0x3A6EA5, transparent: true, opacity: 0.35 });
   for (let ix = 0; ix < d.nx; ix++) {
-    const x = ix * d.sx;
+    const x = d.xPosMm[ix] || 0;
     const geom = new THREE.BufferGeometry().setFromPoints([toV(x, 0, 0), toV(x, sizeY, 0)]);
     state.gridGroup.add(new THREE.Line(geom, gridMat));
   }
   for (let iy = 0; iy < d.ny; iy++) {
-    const y = iy * d.sy;
+    const y = d.yPosMm[iy] || 0;
     const geom = new THREE.BufferGeometry().setFromPoints([toV(0, y, 0), toV(sizeX, y, 0)]);
     state.gridGroup.add(new THREE.Line(geom, gridMat));
   }
@@ -279,29 +342,26 @@ function rebuild() {
   const colGeom = new THREE.BoxGeometry(colW, h || 0.001, colW);
   for (let ix = 0; ix < d.nx; ix++) {
     for (let iy = 0; iy < d.ny; iy++) {
-      const x = ix * d.sx;
-      const y = iy * d.sy;
+      const x = d.xPosMm[ix] || 0;
+      const y = d.yPosMm[iy] || 0;
       const mesh = new THREE.Mesh(colGeom, colMat);
       mesh.position.copy(toV(x, y, d.heightMm / 2));
       state.memberGroup.add(mesh);
     }
   }
 
-  // beams per level
-  let zAcc = 0;
-  for (const lvl of d.levels) {
-    zAcc += lvl;
-    const z = zAcc;
-
+  // beams per level (absolute elevations)
+  for (const z of d.levelsMm) {
     // X direction beams
     for (let iy = 0; iy < d.ny; iy++) {
       for (let ix = 0; ix < d.nx - 1; ix++) {
-        const x0 = ix * d.sx;
-        const x1 = (ix + 1) * d.sx;
+        const x0 = d.xPosMm[ix] || 0;
+        const x1 = d.xPosMm[ix+1] || 0;
         const len = mmToM(x1 - x0);
         const geom = new THREE.BoxGeometry(len || 0.001, beamH, beamW);
         const mesh = new THREE.Mesh(geom, beamMat);
-        mesh.position.copy(toV((x0 + x1) / 2, iy * d.sy, z));
+        const y = d.yPosMm[iy] || 0;
+        mesh.position.copy(toV((x0 + x1) / 2, y, z));
         state.memberGroup.add(mesh);
       }
     }
@@ -309,12 +369,13 @@ function rebuild() {
     // Y direction beams
     for (let ix = 0; ix < d.nx; ix++) {
       for (let iy = 0; iy < d.ny - 1; iy++) {
-        const y0 = iy * d.sy;
-        const y1 = (iy + 1) * d.sy;
+        const y0 = d.yPosMm[iy] || 0;
+        const y1 = d.yPosMm[iy+1] || 0;
         const len = mmToM(y1 - y0);
         const geom = new THREE.BoxGeometry(beamW, beamH, len || 0.001);
         const mesh = new THREE.Mesh(geom, beamMat);
-        mesh.position.copy(toV(ix * d.sx, (y0 + y1) / 2, z));
+        const x = d.xPosMm[ix] || 0;
+        mesh.position.copy(toV(x, (y0 + y1) / 2, z));
         state.memberGroup.add(mesh);
       }
     }
@@ -329,26 +390,99 @@ function rebuild() {
 
 async function copyToClipboard() {
   const d = calc();
+  const kgm = (d.profile && Number.isFinite(d.profile.kgm)) ? d.profile.kgm : null;
+
+  const colLenM = mmToM(d.colLenMm);
+  const beamLenM = mmToM(d.beamLenMm);
+  const sumLenM = colLenM + beamLenM;
+
+  const colLoadKg = (kgm != null) ? colLenM * kgm : null;
+  const beamLoadKg = (kgm != null) ? beamLenM * kgm : null;
+  const sumLoadKg = (kgm != null) ? sumLenM * kgm : null;
+
+  const memberLabel = d.profile.name || d.profile.sizeKey || '';
+
   const lines = [];
   lines.push(['분류', '부재종류', '길이(m)', '갯수', '하중'].join('\t'));
-  lines.push(['기둥', 'COLUMN', String(mmToM(d.colLenMm)), String(d.colCount), '-'].join('\t'));
-  lines.push(['보', 'BEAM', String(mmToM(d.beamLenMm)), String(d.beamCount), '-'].join('\t'));
-  lines.push(['합계', '', String(mmToM(d.colLenMm + d.beamLenMm)), String(d.colCount + d.beamCount), '-'].join('\t'));
+  lines.push(['기둥', memberLabel, String(colLenM), String(d.colCount), colLoadKg == null ? '' : String(colLoadKg)].join('\t'));
+  lines.push(['보', memberLabel, String(beamLenM), String(d.beamCount), beamLoadKg == null ? '' : String(beamLoadKg)].join('\t'));
+  lines.push(['합계', '', String(sumLenM), String(d.colCount + d.beamCount), sumLoadKg == null ? '' : String(sumLoadKg)].join('\t'));
   const tsv = lines.join('\n');
   await navigator.clipboard.writeText(tsv);
 }
 
+function fillProfileSelectors(){
+  const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+  const stdSel = els.std();
+  const shapeSel = els.shape();
+  const sizeSel = els.size();
+  if(!stdSel || !shapeSel || !sizeSel) return;
+
+  const STD_LABEL = { KS: 'KR · KS', JIS: 'JP · JIS' };
+  const SHAPE_LABEL = { H:'H', C:'C', L:'L', LC:'LC', Rect:'Rect', I:'I', T:'T' };
+
+  // standards
+  if(stdSel.options.length === 0){
+    stdSel.innerHTML='';
+    ['KS','JIS'].filter(k => data[k]).forEach(k=>{
+      const opt=document.createElement('option');
+      opt.value=k; opt.textContent=STD_LABEL[k]||k;
+      stdSel.appendChild(opt);
+    });
+    stdSel.value = data['KS'] ? 'KS' : (stdSel.options[0]?.value || '');
+  }
+
+  function rebuildShapes(){
+    const stdKey = stdSel.value;
+    const shapes = data[stdKey]?.shapes || {};
+    const keys = Object.keys(shapes);
+    shapeSel.innerHTML='';
+    keys.forEach(k=>{
+      const opt=document.createElement('option');
+      opt.value=k; opt.textContent = SHAPE_LABEL[k] || k;
+      shapeSel.appendChild(opt);
+    });
+    if(keys.includes('H')) shapeSel.value='H';
+  }
+
+  function rebuildSizes(){
+    const stdKey = stdSel.value;
+    const shapeKey = shapeSel.value;
+    const items = data[stdKey]?.shapes?.[shapeKey]?.items || [];
+    sizeSel.innerHTML='';
+    items.forEach(it=>{
+      const opt=document.createElement('option');
+      opt.value = it.key;
+      opt.textContent = `${it.name}${(it.kgm!=null && Number.isFinite(it.kgm)) ? ` · ${it.kgm} kg/m` : ''}`;
+      sizeSel.appendChild(opt);
+    });
+
+    // default H 150x150... if present
+    const preferred = items.find(it => /^H\s*150x150/i.test(it.name));
+    if(preferred) sizeSel.value = preferred.key;
+  }
+
+  // init
+  rebuildShapes();
+  rebuildSizes();
+
+  stdSel.addEventListener('change', ()=>{ rebuildShapes(); rebuildSizes(); rebuild(); });
+  shapeSel.addEventListener('change', ()=>{ rebuildSizes(); rebuild(); });
+  sizeSel.addEventListener('change', rebuild);
+}
+
 function wire() {
   initLevels();
+  fillProfileSelectors();
 
-  [els.gridX(), els.gridY(), els.spacingX(), els.spacingY()].forEach((el) => {
+  [els.gridX(), els.gridY(), els.spacingX(), els.spacingY(), els.spansX(), els.spansY()].forEach((el) => {
     el?.addEventListener('input', rebuild);
   });
 
   els.copy()?.addEventListener('click', async () => {
     try {
       await copyToClipboard();
-      window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: 'DRAFT 물량(길이) 표를 복사했습니다. 엑셀에 붙여넣기 하세요.' }));
+      window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: 'DRAFT 물량 표를 복사했습니다. 엑셀에 붙여넣기 하세요.' }));
     } catch (e) {
       window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: '복사 실패(브라우저 권한).' }));
     }

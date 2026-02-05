@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0256" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0308" />
 </head>
 <body>
   <header class="top">
@@ -245,9 +245,12 @@
                   <div class="form">
                     <label><span>Grid X (가로 개수)</span><input id="drGridX" type="number" min="1" step="1" value="4" /></label>
                     <label><span>Grid Y (세로 개수)</span><input id="drGridY" type="number" min="1" step="1" value="3" /></label>
-                    <label><span>X 간격 (mm)</span><input id="drSpacingX" type="number" min="1" step="1" value="6000" /></label>
-                    <label><span>Y 간격 (mm)</span><input id="drSpacingY" type="number" min="1" step="1" value="6000" /></label>
+                    <label><span>X 기본 간격 (mm)</span><input id="drSpacingX" type="number" min="1" step="1" value="6000" /></label>
+                    <label><span>Y 기본 간격 (mm)</span><input id="drSpacingY" type="number" min="1" step="1" value="6000" /></label>
+                    <label><span>X 커스텀 간격들 (mm, 콤마)</span><input id="drSpansX" type="text" placeholder="예: 6000,6000,8000" /></label>
+                    <label><span>Y 커스텀 간격들 (mm, 콤마)</span><input id="drSpansY" type="text" placeholder="예: 6000,6000" /></label>
                   </div>
+                  <div class="hint">커스텀 간격이 있으면 Grid 개수는 간격 개수+1로 자동 적용됩니다.</div>
                 </article>
 
                 <article class="card">
@@ -257,7 +260,7 @@
                     <div class="btns">
                       <button class="btn" id="drAddLevel">레벨 추가</button>
                     </div>
-                    <div class="hint">각 레벨 높이(mm)를 누적해서 기둥/빔이 생성됩니다.</div>
+                    <div class="hint">레벨은 “층간”이 아니라 “절대 높이(mm)” 기준입니다. (예: 4200, 8400)</div>
                   </div>
                 </article>
               </div>
@@ -265,6 +268,16 @@
 
             <section class="draft-qty">
               <div class="card" style="margin-top:0">
+                <h2>프로파일(공통)</h2>
+                <div class="form">
+                  <label><span>국가/규격</span><select id="drStd"></select></label>
+                  <label><span>부재종류</span><select id="drShape"></select></label>
+                  <label><span>프로파일</span><select id="drSize"></select></label>
+                </div>
+                <div class="hint">기본값: KR·KS / H / H 150x150… (가능한 목록은 엑셀 데이터 기반)</div>
+              </div>
+
+              <div class="card" style="margin-top:12px">
                 <h2>전체 물량</h2>
 
                 <div class="sum-table-wrap">
@@ -307,7 +320,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0306"></script>
-  <script type="module" src="/civilarchi/assets/draft.js?v=20260205_0306"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0308"></script>
+  <script type="module" src="/civilarchi/assets/draft.js?v=20260205_0308"></script>
 </body>
 </html>
