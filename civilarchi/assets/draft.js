@@ -36,9 +36,11 @@ const els = {
   levels: () => document.getElementById('drLevels'),
   addLevel: () => document.getElementById('drAddLevel'),
 
-  std: () => document.getElementById('drStd'),
-  shape: () => document.getElementById('drShape'),
-  size: () => document.getElementById('drSize'),
+  stdAll: () => document.getElementById('drStdAll'),
+  colShape: () => document.getElementById('drColShape'),
+  colSize: () => document.getElementById('drColSize'),
+  beamShape: () => document.getElementById('drBeamShape'),
+  beamSize: () => document.getElementById('drBeamSize'),
 
   copy: () => document.getElementById('drCopy'),
 
@@ -146,11 +148,11 @@ function cumulativePos(spans){
   return pos;
 }
 
-function getProfile(){
+function getProfile(role){
   const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
-  const stdKey = els.std()?.value || 'KS';
-  const shapeKey = els.shape()?.value || 'H';
-  const sizeKey = els.size()?.value || '';
+  const stdKey = els.stdAll()?.value || 'KS';
+  const shapeKey = (role==='col' ? els.colShape()?.value : els.beamShape()?.value) || 'H';
+  const sizeKey = (role==='col' ? els.colSize()?.value : els.beamSize()?.value) || '';
   const item = data?.[stdKey]?.shapes?.[shapeKey]?.items?.find(it => it.key === sizeKey) || null;
   return { stdKey, shapeKey, sizeKey, item, kgm: item?.kgm ?? null, name: item?.name ?? '' };
 }
@@ -188,9 +190,10 @@ function calc() {
   const beamLenPerLevelMm = (ny * sumX) + (nx * sumY);
   const beamLenMm = beamLevels * beamLenPerLevelMm;
 
-  const profile = getProfile();
+  const profileCol = getProfile('col');
+  const profileBeam = getProfile('beam');
 
-  return { nx, ny, spansX, spansY, xPosMm, yPosMm, levelsMm, heightMm, colCount, colLenMm, beamCount, beamLenMm, profile };
+  return { nx, ny, spansX, spansY, xPosMm, yPosMm, levelsMm, heightMm, colCount, colLenMm, beamCount, beamLenMm, profileCol, profileBeam };
 }
 
 function ensureThree() {
@@ -267,13 +270,15 @@ function renderQty(d) {
   const colLenM = mmToM(d.colLenMm);
   const beamLenM = mmToM(d.beamLenMm);
 
-  const kgm = (d.profile && Number.isFinite(d.profile.kgm)) ? d.profile.kgm : null;
-  const colLoadKg = (kgm != null) ? (colLenM * kgm) : null;
-  const beamLoadKg = (kgm != null) ? (beamLenM * kgm) : null;
+  const kgmCol = (d.profileCol && Number.isFinite(d.profileCol.kgm)) ? d.profileCol.kgm : null;
+  const kgmBeam = (d.profileBeam && Number.isFinite(d.profileBeam.kgm)) ? d.profileBeam.kgm : null;
+
+  const colLoadKg = (kgmCol != null) ? (colLenM * kgmCol) : null;
+  const beamLoadKg = (kgmBeam != null) ? (beamLenM * kgmBeam) : null;
 
   const rows = [
-    { cat: '기둥', member: d.profile.name || d.profile.sizeKey || 'COLUMN', len: colLenM, count: d.colCount, loadKg: colLoadKg },
-    { cat: '보', member: d.profile.name || d.profile.sizeKey || 'BEAM', len: beamLenM, count: d.beamCount, loadKg: beamLoadKg },
+    { cat: '기둥', member: d.profileCol.name || d.profileCol.sizeKey || 'COLUMN', len: colLenM, count: d.colCount, loadKg: colLoadKg },
+    { cat: '보', member: d.profileBeam.name || d.profileBeam.sizeKey || 'BEAM', len: beamLenM, count: d.beamCount, loadKg: beamLoadKg },
   ];
 
   rowsEl.innerHTML = '';
@@ -291,7 +296,7 @@ function renderQty(d) {
 
   const sumCount = d.colCount + d.beamCount;
   const sumLen = colLenM + beamLenM;
-  const sumLoad = (kgm != null) ? ((sumLen * kgm)) : null;
+  const sumLoad = ((colLoadKg ?? 0) + (beamLoadKg ?? 0)) || null;
 
   els.qtySumCount().textContent = fmt(sumCount, 0);
   els.qtySumLen().textContent = fmt(sumLen, 3);
@@ -329,22 +334,33 @@ function rebuild() {
     state.gridGroup.add(new THREE.Line(geom, gridMat));
   }
 
-  // members (placeholder box sections)
-  const colMat = new THREE.MeshStandardMaterial({ color: 0x1F2A44, roughness: 0.8, metalness: 0.15 });
-  const beamMat = new THREE.MeshStandardMaterial({ color: 0x2E2E2E, roughness: 0.85, metalness: 0.05 });
+  function parseH(name){
+    // Name like: "H 150x150x10x7"
+    const m = String(name||'').match(/H\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
+    if(!m) return null;
+    return { H: parseFloat(m[1]), B: parseFloat(m[2]), tf: parseFloat(m[3]), tw: parseFloat(m[4]) };
+  }
 
-  const colW = mmToM(200);
-  const beamW = mmToM(180);
-  const beamH = mmToM(220);
+  // members (placeholder but profile-sized)
+  const matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
+
+  const colHdim = (d.profileCol.shapeKey === 'H') ? parseH(d.profileCol.name) : null;
+  const beamHdim = (d.profileBeam.shapeKey === 'H') ? parseH(d.profileBeam.name) : null;
+
+  const colB = mmToM(colHdim?.B ?? 200);
+  const colD = mmToM(colHdim?.H ?? 200);
+
+  const beamB = mmToM(beamHdim?.B ?? 180);
+  const beamD = mmToM(beamHdim?.H ?? 220);
 
   // columns (one piece)
   const h = mmToM(d.heightMm);
-  const colGeom = new THREE.BoxGeometry(colW, h || 0.001, colW);
+  const colGeom = new THREE.BoxGeometry(colB, h || 0.001, colD);
   for (let ix = 0; ix < d.nx; ix++) {
     for (let iy = 0; iy < d.ny; iy++) {
       const x = d.xPosMm[ix] || 0;
       const y = d.yPosMm[iy] || 0;
-      const mesh = new THREE.Mesh(colGeom, colMat);
+      const mesh = new THREE.Mesh(colGeom, matGray);
       mesh.position.copy(toV(x, y, d.heightMm / 2));
       state.memberGroup.add(mesh);
     }
@@ -358,8 +374,8 @@ function rebuild() {
         const x0 = d.xPosMm[ix] || 0;
         const x1 = d.xPosMm[ix+1] || 0;
         const len = mmToM(x1 - x0);
-        const geom = new THREE.BoxGeometry(len || 0.001, beamH, beamW);
-        const mesh = new THREE.Mesh(geom, beamMat);
+        const geom = new THREE.BoxGeometry(len || 0.001, beamD, beamB);
+        const mesh = new THREE.Mesh(geom, matGray);
         const y = d.yPosMm[iy] || 0;
         mesh.position.copy(toV((x0 + x1) / 2, y, z));
         state.memberGroup.add(mesh);
@@ -372,8 +388,8 @@ function rebuild() {
         const y0 = d.yPosMm[iy] || 0;
         const y1 = d.yPosMm[iy+1] || 0;
         const len = mmToM(y1 - y0);
-        const geom = new THREE.BoxGeometry(beamW, beamH, len || 0.001);
-        const mesh = new THREE.Mesh(geom, beamMat);
+        const geom = new THREE.BoxGeometry(beamB, beamD, len || 0.001);
+        const mesh = new THREE.Mesh(geom, matGray);
         const x = d.xPosMm[ix] || 0;
         mesh.position.copy(toV(x, (y0 + y1) / 2, z));
         state.memberGroup.add(mesh);
@@ -390,22 +406,24 @@ function rebuild() {
 
 async function copyToClipboard() {
   const d = calc();
-  const kgm = (d.profile && Number.isFinite(d.profile.kgm)) ? d.profile.kgm : null;
+  const kgmCol = (d.profileCol && Number.isFinite(d.profileCol.kgm)) ? d.profileCol.kgm : null;
+  const kgmBeam = (d.profileBeam && Number.isFinite(d.profileBeam.kgm)) ? d.profileBeam.kgm : null;
 
   const colLenM = mmToM(d.colLenMm);
   const beamLenM = mmToM(d.beamLenMm);
   const sumLenM = colLenM + beamLenM;
 
-  const colLoadKg = (kgm != null) ? colLenM * kgm : null;
-  const beamLoadKg = (kgm != null) ? beamLenM * kgm : null;
-  const sumLoadKg = (kgm != null) ? sumLenM * kgm : null;
+  const colLoadKg = (kgmCol != null) ? colLenM * kgmCol : null;
+  const beamLoadKg = (kgmBeam != null) ? beamLenM * kgmBeam : null;
+  const sumLoadKg = ((colLoadKg ?? 0) + (beamLoadKg ?? 0)) || null;
 
-  const memberLabel = d.profile.name || d.profile.sizeKey || '';
+  const colLabel = d.profileCol.name || d.profileCol.sizeKey || '';
+  const beamLabel = d.profileBeam.name || d.profileBeam.sizeKey || '';
 
   const lines = [];
   lines.push(['분류', '부재종류', '길이(m)', '갯수', '하중'].join('\t'));
-  lines.push(['기둥', memberLabel, String(colLenM), String(d.colCount), colLoadKg == null ? '' : String(colLoadKg)].join('\t'));
-  lines.push(['보', memberLabel, String(beamLenM), String(d.beamCount), beamLoadKg == null ? '' : String(beamLoadKg)].join('\t'));
+  lines.push(['기둥', colLabel, String(colLenM), String(d.colCount), colLoadKg == null ? '' : String(colLoadKg)].join('\t'));
+  lines.push(['보', beamLabel, String(beamLenM), String(d.beamCount), beamLoadKg == null ? '' : String(beamLoadKg)].join('\t'));
   lines.push(['합계', '', String(sumLenM), String(d.colCount + d.beamCount), sumLoadKg == null ? '' : String(sumLoadKg)].join('\t'));
   const tsv = lines.join('\n');
   await navigator.clipboard.writeText(tsv);
@@ -413,40 +431,41 @@ async function copyToClipboard() {
 
 function fillProfileSelectors(){
   const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
-  const stdSel = els.std();
-  const shapeSel = els.shape();
-  const sizeSel = els.size();
-  if(!stdSel || !shapeSel || !sizeSel) return;
+  const stdAll = els.stdAll();
+  const colShape = els.colShape();
+  const colSize = els.colSize();
+  const beamShape = els.beamShape();
+  const beamSize = els.beamSize();
+
+  if(!stdAll || !colShape || !colSize || !beamShape || !beamSize) return;
 
   const STD_LABEL = { KS: 'KR · KS', JIS: 'JP · JIS' };
-  const SHAPE_LABEL = { H:'H', C:'C', L:'L', LC:'LC', Rect:'Rect', I:'I', T:'T' };
+  const SHAPE_KEYS = ['H','C','L','LC','Rect','I','T'];
 
   // standards
-  if(stdSel.options.length === 0){
-    stdSel.innerHTML='';
-    ['KS','JIS'].filter(k => data[k]).forEach(k=>{
-      const opt=document.createElement('option');
-      opt.value=k; opt.textContent=STD_LABEL[k]||k;
-      stdSel.appendChild(opt);
-    });
-    stdSel.value = data['KS'] ? 'KS' : (stdSel.options[0]?.value || '');
-  }
+  stdAll.innerHTML='';
+  ['KS','JIS'].filter(k => data[k]).forEach(k=>{
+    const opt=document.createElement('option');
+    opt.value=k; opt.textContent=STD_LABEL[k]||k;
+    stdAll.appendChild(opt);
+  });
+  stdAll.value = data['KS'] ? 'KS' : (stdAll.options[0]?.value || '');
 
-  function rebuildShapes(){
-    const stdKey = stdSel.value;
+  function rebuildShapeSelect(sel){
+    const stdKey = stdAll.value;
     const shapes = data[stdKey]?.shapes || {};
-    const keys = Object.keys(shapes);
-    shapeSel.innerHTML='';
+    const keys = SHAPE_KEYS.filter(k=>shapes[k]);
+    sel.innerHTML='';
     keys.forEach(k=>{
       const opt=document.createElement('option');
-      opt.value=k; opt.textContent = SHAPE_LABEL[k] || k;
-      shapeSel.appendChild(opt);
+      opt.value=k; opt.textContent=k;
+      sel.appendChild(opt);
     });
-    if(keys.includes('H')) shapeSel.value='H';
+    if(keys.includes('H')) sel.value='H';
   }
 
-  function rebuildSizes(){
-    const stdKey = stdSel.value;
+  function rebuildSizeSelect(shapeSel, sizeSel){
+    const stdKey = stdAll.value;
     const shapeKey = shapeSel.value;
     const items = data[stdKey]?.shapes?.[shapeKey]?.items || [];
     sizeSel.innerHTML='';
@@ -456,19 +475,24 @@ function fillProfileSelectors(){
       opt.textContent = `${it.name}${(it.kgm!=null && Number.isFinite(it.kgm)) ? ` · ${it.kgm} kg/m` : ''}`;
       sizeSel.appendChild(opt);
     });
-
-    // default H 150x150... if present
     const preferred = items.find(it => /^H\s*150x150/i.test(it.name));
     if(preferred) sizeSel.value = preferred.key;
   }
 
-  // init
-  rebuildShapes();
-  rebuildSizes();
+  function rebuildAll(){
+    rebuildShapeSelect(colShape);
+    rebuildShapeSelect(beamShape);
+    rebuildSizeSelect(colShape, colSize);
+    rebuildSizeSelect(beamShape, beamSize);
+  }
 
-  stdSel.addEventListener('change', ()=>{ rebuildShapes(); rebuildSizes(); rebuild(); });
-  shapeSel.addEventListener('change', ()=>{ rebuildSizes(); rebuild(); });
-  sizeSel.addEventListener('change', rebuild);
+  rebuildAll();
+
+  stdAll.addEventListener('change', ()=>{ rebuildAll(); rebuild(); });
+  colShape.addEventListener('change', ()=>{ rebuildSizeSelect(colShape, colSize); rebuild(); });
+  beamShape.addEventListener('change', ()=>{ rebuildSizeSelect(beamShape, beamSize); rebuild(); });
+  colSize.addEventListener('change', rebuild);
+  beamSize.addEventListener('change', rebuild);
 }
 
 function wire() {
