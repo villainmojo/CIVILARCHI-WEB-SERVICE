@@ -769,8 +769,7 @@ function initSelectionUI(){
       return;
     }
 
-    // open panel on selection
-    setCollapsed(false);
+    // keep panel collapsed; user opens via button
 
     const stdKey = els.stdAll()?.value || last.stdKey || 'KS';
     const shapes = data?.[stdKey]?.shapes || {};
