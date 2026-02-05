@@ -161,6 +161,7 @@ label.inline input{width:auto}
 
 /* buttons */
 .btns{display:flex; gap:10px; flex-wrap:wrap}
+.export-bar{display:flex; gap:10px; flex-wrap:wrap}
 .btn{
   cursor:pointer;
   border-radius: 12px;

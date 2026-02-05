@@ -68,6 +68,10 @@ const els = {
   copy: () => document.getElementById('drCopy'),
   viewHome: () => document.getElementById('drViewHome'),
 
+  exportStaad: () => document.getElementById('drExportStaad'),
+  exportIfc: () => document.getElementById('drExportIfc'),
+  exportData: () => document.getElementById('drExportData'),
+
   qtyRows: () => document.getElementById('drQtyRows'),
   qtySumCount: () => document.getElementById('drQtySumCount'),
   qtySumLen: () => document.getElementById('drQtySumLen'),
@@ -106,6 +110,46 @@ const braces = [];
 
 /** @type {Record<string, {shapeKey:string, sizeKey:string}>} */
 const overrides = {};
+
+function downloadText(filename, text){
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 500);
+}
+
+function collectMemberRecords(){
+  const recs = [];
+  const addFromGroup = (g)=>{
+    for(const m of (g?.children||[])){
+      const ud = m.userData || {};
+      if(!ud.p0 || !ud.p1) continue;
+      const dx = ud.p1.x-ud.p0.x;
+      const dy = ud.p1.y-ud.p0.y;
+      const dz = ud.p1.z-ud.p0.z;
+      const lenMm = Math.sqrt(dx*dx+dy*dy+dz*dz);
+      recs.push({
+        id: ud.id || '',
+        role: ud.role || '',
+        stdKey: ud.stdKey || '',
+        shapeKey: ud.shapeKey || '',
+        sizeKey: ud.sizeKey || '',
+        name: ud.name || '',
+        x0: ud.p0.x, y0: ud.p0.y, z0: ud.p0.z,
+        x1: ud.p1.x, y1: ud.p1.y, z1: ud.p1.z,
+        lenMm,
+      });
+    }
+  };
+  addFromGroup(state.memberGroup);
+  addFromGroup(state.braceGroup);
+  return recs;
+}
 
 function effectiveProfile(base, memberId){
   const ov = memberId ? overrides[memberId] : null;
@@ -892,7 +936,7 @@ function rebuild() {
               ? makeTGeomForColumn(h || 0.001, tdim)
               : new THREE.BoxGeometry(b, h || 0.001, dd);
       const mesh = new THREE.Mesh(geom, state.roleMats.col);
-      mesh.userData = { id, role: 'col', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
+      mesh.userData = { id, role: 'col', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name, p0:{x, y, z:0}, p1:{x, y, z:d.heightMm} };
       mesh.position.copy(toV(x, y, d.heightMm / 2));
       state.memberGroup.add(mesh);
     }
@@ -1012,8 +1056,8 @@ function rebuild() {
                 ? makeTGeomForBeamX(len || 0.001, tdim)
                 : new THREE.BoxGeometry(len || 0.001, dd, b);
         const mesh = new THREE.Mesh(geom, state.roleMats.beam);
-        mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const y = d.yPosMm[iy] || 0;
+        mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name, p0:{x:x0, y, z}, p1:{x:x1, y, z} };
         // Place beam TOP at level elevation
         mesh.position.copy(toV((x0 + x1) / 2, y, z - (dim?.H ?? (beamHdim?.H ?? 220))/2));
         state.memberGroup.add(mesh);
@@ -1044,8 +1088,8 @@ function rebuild() {
                 ? makeTGeomForBeamY(len || 0.001, tdim)
                 : new THREE.BoxGeometry(b, dd, len || 0.001);
         const mesh = new THREE.Mesh(geom, state.roleMats.beam);
-        mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const x = d.xPosMm[ix] || 0;
+        mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name, p0:{x, y:y0, z}, p1:{x, y:y1, z} };
         // Place beam TOP at level elevation
         mesh.position.copy(toV(x, (y0 + y1) / 2, z - (dim?.H ?? (beamHdim?.H ?? 220))/2));
         state.memberGroup.add(mesh);
@@ -1081,7 +1125,7 @@ function rebuild() {
                 ? makeHGeomForBeamX(len || 0.001, dim)
                 : new THREE.BoxGeometry(len || 0.001, dd, b);
               const mesh = new THREE.Mesh(geom, state.roleMats.sub);
-              mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
+              mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name, p0:{x:x0, y, z}, p1:{x:x1, y, z} };
               mesh.position.copy(toV((x0+x1)/2, y, z - (dim?.H ?? 200)/2));
               state.memberGroup.add(mesh);
             }
@@ -1102,7 +1146,7 @@ function rebuild() {
                 ? makeHGeomForBeamY(len || 0.001, dim)
                 : new THREE.BoxGeometry(b, dd, len || 0.001);
               const mesh = new THREE.Mesh(geom, state.roleMats.sub);
-              mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
+              mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name, p0:{x, y:y0, z}, p1:{x, y:y1, z} };
               mesh.position.copy(toV(x, (y0+y1)/2, z - (dim?.H ?? 200)/2));
               state.memberGroup.add(mesh);
             }
@@ -1139,7 +1183,7 @@ function rebuild() {
               ? makeCGeomForBeamY(len || 0.001, cdim)
               : new THREE.BoxGeometry(mmToM(65), mmToM(125), len || 0.001);
             const mesh = new THREE.Mesh(geom, state.roleMats.joist);
-            mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
+            mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey, name: profJ.name, p0:{x:xmm, y:0, z}, p1:{x:xmm, y:sizeYmm, z} };
             // center in Y (grid) direction
             mesh.position.copy(toV(xmm, sizeYmm/2, z - (cdim?.H ?? 125)/2));
             state.memberGroup.add(mesh);
@@ -1157,7 +1201,7 @@ function rebuild() {
               ? makeCGeomForBeamX(len || 0.001, cdim)
               : new THREE.BoxGeometry(len || 0.001, mmToM(125), mmToM(65));
             const mesh = new THREE.Mesh(geom, state.roleMats.joist);
-            mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
+            mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey, name: profJ.name, p0:{x:0, y:ymm, z}, p1:{x:sizeXmm, y:ymm, z} };
             mesh.position.copy(toV(sizeXmm/2, ymm, z - (cdim?.H ?? 125)/2));
             state.memberGroup.add(mesh);
           }
@@ -1192,6 +1236,7 @@ function rebuild() {
 
     const geom = braceGeomAlongX(len, prof);
     const mesh = new THREE.Mesh(geom, braceMat);
+    mesh.userData = { id: `BRM_${Math.random().toString(16).slice(2,6)}`, role:'brace', stdKey: prof.stdKey||'', shapeKey: prof.shapeKey||'', sizeKey: prof.sizeKey||'', name: prof.name||'', p0, p1 };
     // position mid
     mesh.position.copy(toV((p0.x+p1.x)/2, (p0.y+p1.y)/2, (p0.z+p1.z)/2));
     // orient along vector in world coords: our axes mapping is (x->X), (y->Z), (z->Y) in toV
@@ -1599,6 +1644,76 @@ function wire() {
     state.__userMoved = false;
     rebuild();
     state.__userMoved = true;
+  });
+
+  // Exports
+  els.exportData()?.addEventListener('click', ()=>{
+    const recs = collectMemberRecords();
+    const header = ['id','role','std','shape','size','name','x0_mm','y0_mm','z0_mm','x1_mm','y1_mm','z1_mm','len_m'];
+    const lines = [header.join(',')];
+    for(const r of recs){
+      lines.push([
+        r.id,
+        r.role,
+        r.stdKey,
+        r.shapeKey,
+        r.sizeKey,
+        (r.name||'').replaceAll(',', ' '),
+        r.x0,
+        r.y0,
+        r.z0,
+        r.x1,
+        r.y1,
+        r.z1,
+        (r.lenMm/1000).toFixed(6),
+      ].join(','));
+    }
+    downloadText('civilarchi-data.csv', lines.join('\n'));
+  });
+
+  els.exportStaad()?.addEventListener('click', ()=>{
+    const recs = collectMemberRecords();
+    // joints
+    const keyOf = (x,y,z)=>`${x},${y},${z}`;
+    const joints = new Map();
+    let jn=1;
+    const jointNum = (x,y,z)=>{
+      const k = keyOf(x,y,z);
+      if(!joints.has(k)) joints.set(k, jn++);
+      return joints.get(k);
+    };
+
+    const members = [];
+    let mn=1;
+    for(const r of recs){
+      const n1 = jointNum(r.x0, r.y0, r.z0);
+      const n2 = jointNum(r.x1, r.y1, r.z1);
+      members.push({ no: mn++, n1, n2, role:r.role, prof: r.name||r.sizeKey||r.shapeKey });
+    }
+
+    const out=[];
+    out.push('STAAD SPACE');
+    out.push('START JOB INFORMATION');
+    out.push('ENGINEER DATE 05-Feb-2026');
+    out.push('END JOB INFORMATION');
+    out.push('UNIT METER KN');
+    out.push('JOINT COORDINATES');
+    for(const [k,no] of joints.entries()){
+      const [x,y,z]=k.split(',').map(Number);
+      out.push(`${no} ${ (x/1000).toFixed(6) } ${ (z/1000).toFixed(6) } ${ (y/1000).toFixed(6) }`);
+    }
+    out.push('MEMBER INCIDENCES');
+    for(const m of members){
+      out.push(`${m.no} ${m.n1} ${m.n2}`);
+    }
+    out.push('* NOTE: Member properties are not exported yet (geometry only).');
+    out.push('FINISH');
+
+    downloadText('civilarchi.staad.std', out.join('\n'));
+  });
+
+  els.exportIfc()?.addEventListener('click', ()=>{
+    window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: 'IFC Export는 준비중입니다. (현재 STAAD/DATA만 지원)' }));
   });
 }
 
