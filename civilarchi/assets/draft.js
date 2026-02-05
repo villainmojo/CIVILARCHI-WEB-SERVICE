@@ -700,7 +700,10 @@ function initSelectionUI(){
     if(!panel) return;
     panel.classList.toggle('collapsed', !!on);
   }
-  btnToggle && (btnToggle.onclick = ()=> setCollapsed(!(panel && !panel.classList.contains('collapsed'))));
+  btnToggle && (btnToggle.onclick = ()=>{
+    if(!panel) return;
+    setCollapsed(!panel.classList.contains('collapsed'));
+  });
   btnCollapse && (btnCollapse.onclick = ()=> setCollapsed(true));
   // default collapsed
   setCollapsed(true);
