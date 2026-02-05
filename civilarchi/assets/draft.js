@@ -304,11 +304,12 @@ function ensureThree() {
 
   state.controls = new OrbitControls(state.camera, state.renderer.domElement);
   state.controls.enableDamping = true;
+  state.controls.addEventListener('change', ()=>{ state.__userMoved = true; });
 
   state.raycaster = new THREE.Raycaster();
   state.pointer = new THREE.Vector2();
 
-  // Brace face hover highlight
+  // Brace face hover highlight (each face uses its own material instance)
   let lastFace = null;
   function setFaceHover(faceMesh){
     if(lastFace && lastFace.material){
@@ -317,7 +318,7 @@ function ensureThree() {
     }
     lastFace = faceMesh;
     if(lastFace && lastFace.material){
-      lastFace.material.opacity = 0.14;
+      lastFace.material.opacity = 0.16;
       lastFace.material.needsUpdate = true;
     }
   }
@@ -894,21 +895,17 @@ function rebuild() {
         const w = mmToM(x1-x0);
         const hface = mmToM(z1-z0);
         const geom = new THREE.PlaneGeometry(w||0.001, hface||0.001);
-        const mesh = new THREE.Mesh(geom, matFace);
-        // PlaneGeometry is in XY; map X->X, Y->Z, face normal +Z; rotate to stand vertical facing +Y
-        mesh.rotation.x = -Math.PI/2;
+        const mesh = new THREE.Mesh(geom, matFace.clone());
+        // PlaneGeometry is XY (X span, Z span) and sits vertical with normal +Z (our grid-Y axis)
         mesh.position.copy(toV((x0+x1)/2, y, (z0+z1)/2));
 
         const faceKey = `F_Y_${iy}_${ix}_${z0}_${z1}`;
-        mesh.userData = {
-          faceKey,
-          corners: {
-            a: { x: x0, y, z: z0 },
-            b: { x: x1, y, z: z1 },
-            c: { x: x0, y, z: z1 },
-            d: { x: x1, y, z: z0 },
-          },
-        };
+        // corners: bottom-left/right and top-left/right in the rectangle
+        const p00 = { x: x0, y, z: z0 };
+        const p10 = { x: x1, y, z: z0 };
+        const p01 = { x: x0, y, z: z1 };
+        const p11 = { x: x1, y, z: z1 };
+        mesh.userData = { faceKey, corners: { a:p00, b:p11, c:p01, d:p10 } };
         state.bracePlaneGroup.add(mesh);
       }
     }
@@ -922,21 +919,17 @@ function rebuild() {
         const w = mmToM(y1-y0);
         const hface = mmToM(z1-z0);
         const geom = new THREE.PlaneGeometry(w||0.001, hface||0.001);
-        const mesh = new THREE.Mesh(geom, matFace);
+        const mesh = new THREE.Mesh(geom, matFace.clone());
+        // rotate so plane spans Z (grid-Y) and Y (level)
         mesh.rotation.y = Math.PI/2;
-        mesh.rotation.x = -Math.PI/2;
         mesh.position.copy(toV(x, (y0+y1)/2, (z0+z1)/2));
 
         const faceKey = `F_X_${ix}_${iy}_${z0}_${z1}`;
-        mesh.userData = {
-          faceKey,
-          corners: {
-            a: { x, y: y0, z: z0 },
-            b: { x, y: y1, z: z1 },
-            c: { x, y: y0, z: z1 },
-            d: { x, y: y1, z: z0 },
-          },
-        };
+        const p00 = { x, y: y0, z: z0 };
+        const p10 = { x, y: y1, z: z0 };
+        const p01 = { x, y: y0, z: z1 };
+        const p11 = { x, y: y1, z: z1 };
+        mesh.userData = { faceKey, corners: { a:p00, b:p11, c:p01, d:p10 } };
         state.bracePlaneGroup.add(mesh);
       }
     }
@@ -1171,11 +1164,13 @@ function rebuild() {
     }
   }
 
-  // frame camera
-  const radius = mmToM(Math.max(sizeX, sizeY, d.heightMm)) * 0.9 + 2;
-  state.camera.position.set(radius, radius * 0.85, radius);
-  state.controls.target.set(0, mmToM(d.heightMm) * 0.45, 0);
-  state.controls.update();
+  // frame camera (only on first build / before user interaction)
+  if(!state.__userMoved){
+    const radius = mmToM(Math.max(sizeX, sizeY, d.heightMm)) * 0.9 + 2;
+    state.camera.position.set(radius, radius * 0.85, radius);
+    state.controls.target.set(0, mmToM(d.heightMm) * 0.45, 0);
+    state.controls.update();
+  }
 }
 
 async function copyToClipboard() {
@@ -1368,12 +1363,20 @@ function initBraceUI(){
   window.addEventListener('civilarchi:draft:braceFace', (e)=>{
     const face = e.detail;
     if(!face?.faceKey) return;
+
+    // If braces exist on this face => delete them (requested)
+    const before = braces.length;
+    for(let i=braces.length-1; i>=0; i--){
+      if(braces[i].faceKey === face.faceKey) braces.splice(i,1);
+    }
+    if(braces.length !== before){
+      renderBraceList();
+      rebuild();
+      return;
+    }
+
+    // else create
     const prof = state.braceProfile || getProfileBy('L','');
-
-    // Prevent duplicates on same face+kind
-    const key = `${face.faceKey}|${state.braceType}|${prof.stdKey}|${prof.shapeKey}|${prof.sizeKey}`;
-    if(braces.some(b=>`${b.faceKey}|${b.kind}|${b.stdKey}|${b.shapeKey}|${b.sizeKey}`===key)) return;
-
     const id = `BR_${Date.now()}_${Math.random().toString(16).slice(2,6)}`;
     const b = { id, faceKey: face.faceKey, kind: state.braceType, stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name || prof.sizeKey, kgm: prof.kgm ?? null, ...face.corners };
     braces.push(b);
