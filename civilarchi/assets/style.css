@@ -226,9 +226,7 @@ label.inline input{width:auto}
 .draft-canvas-wrap{width:100%; position:relative}
 .draft-canvas{height: 480px; background: #fff; border:1px solid rgba(31,42,68,0.14); border-radius: calc(var(--radius) + 8px); box-shadow: var(--shadow); overflow:hidden}
 
-.draft-topopts{display:flex; gap:14px; margin-top:8px; align-items:center; flex-wrap:wrap}
-.ck{display:inline-flex; gap:8px; align-items:center; font-weight:700; color: rgba(31,42,68,0.85)}
-.ck input{width:16px; height:16px}
+/* removed top checkboxes (draft-topopts) */
 
 .draft-subjoist{
   padding: 10px 12px;
