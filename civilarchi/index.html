@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0515" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0519" />
 </head>
 <body>
   <header class="top">
@@ -437,6 +437,34 @@
                   <button class="btn" id="drExportIfc">IFC Export</button>
                   <button class="btn" id="drExportData">DATA Export</button>
                 </div>
+
+                <div class="export-opts" style="margin-top:10px">
+                  <div class="sb-title" style="margin-top:0">STAAD 옵션</div>
+                  <div class="form" style="margin-top:8px">
+                    <label><span>단위</span>
+                      <select id="drStaadUnit">
+                        <option value="METER_KN" selected>METER / kN</option>
+                        <option value="MM_N">MM / N</option>
+                      </select>
+                    </label>
+                    <label><span>재질(상수)</span>
+                      <select id="drStaadMat">
+                        <option value="STEEL" selected>STEEL</option>
+                        <option value="NONE">(미지정)</option>
+                      </select>
+                    </label>
+                    <label><span>그룹</span>
+                      <select id="drStaadGroup">
+                        <option value="ROLE" selected>부재종류별</option>
+                        <option value="PROFILE">프로파일별</option>
+                        <option value="BOTH">둘 다</option>
+                        <option value="NONE">(없음)</option>
+                      </select>
+                    </label>
+                    <div class="hint">단면 지정은 우선 PRIS(외형치수 기반)로 내보냅니다. (추후 TABLE ST 매핑 확장)</div>
+                  </div>
+                </div>
+
                 <div class="hint">STAAD: .std / IFC: .ifc / DATA: 각 부재의 시작·끝 좌표 + 프로파일 CSV</div>
               </div>
             </section>
@@ -451,7 +479,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0515"></script>
-  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0515"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0519"></script>
+  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0519"></script>
 </body>
 </html>

@@ -72,6 +72,10 @@ const els = {
   exportIfc: () => document.getElementById('drExportIfc'),
   exportData: () => document.getElementById('drExportData'),
 
+  staadUnit: () => document.getElementById('drStaadUnit'),
+  staadMat: () => document.getElementById('drStaadMat'),
+  staadGroup: () => document.getElementById('drStaadGroup'),
+
   qtyRows: () => document.getElementById('drQtyRows'),
   qtySumCount: () => document.getElementById('drQtySumCount'),
   qtySumLen: () => document.getElementById('drQtySumLen'),
@@ -1673,6 +1677,17 @@ function wire() {
 
   els.exportStaad()?.addEventListener('click', ()=>{
     const recs = collectMemberRecords();
+
+    const unitMode = els.staadUnit()?.value || 'METER_KN';
+    const matMode = els.staadMat()?.value || 'STEEL';
+    const grpMode = els.staadGroup()?.value || 'ROLE';
+
+    const U = {
+      isMeter: unitMode === 'METER_KN',
+      unitLine: unitMode === 'MM_N' ? 'UNIT MM N' : 'UNIT METER KN',
+      toLen: (mm)=> unitMode === 'MM_N' ? mm : (mm/1000),
+    };
+
     // joints
     const keyOf = (x,y,z)=>`${x},${y},${z}`;
     const joints = new Map();
@@ -1688,25 +1703,109 @@ function wire() {
     for(const r of recs){
       const n1 = jointNum(r.x0, r.y0, r.z0);
       const n2 = jointNum(r.x1, r.y1, r.z1);
-      members.push({ no: mn++, n1, n2, role:r.role, prof: r.name||r.sizeKey||r.shapeKey });
+      members.push({ no: mn++, n1, n2, ...r, profLabel: r.name||r.sizeKey||r.shapeKey });
+    }
+
+    // profile dims (best-effort) => PRIS YD ZD rectangle using overall depth/width
+    function dimsFrom(name, shapeKey){
+      const tryH = (shapeKey==='H') ? String(name||'').match(/H\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i) : null;
+      if(tryH) return { d: parseFloat(tryH[1]), b: parseFloat(tryH[2]) };
+      const tryC = (shapeKey==='C') ? String(name||'').match(/C\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i) : null;
+      if(tryC) return { d: parseFloat(tryC[1]), b: parseFloat(tryC[2]) };
+      const tryL = (shapeKey==='L') ? String(name||'').match(/\bL\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i) : null;
+      if(tryL) return { d: parseFloat(tryL[1]), b: parseFloat(tryL[2]) };
+      const tryT = (shapeKey==='T') ? String(name||'').match(/\bT\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i) : null;
+      if(tryT) return { d: parseFloat(tryT[1]), b: parseFloat(tryT[2]) };
+      return null;
+    }
+
+    // Build property blocks: one PRIS per unique profile label
+    const profMap = new Map();
+    for(const m of members){
+      const key = `${m.shapeKey}|${m.profLabel}`;
+      if(profMap.has(key)) continue;
+      const dim = dimsFrom(m.name, m.shapeKey) || { d: 200, b: 200 };
+      profMap.set(key, { ...dim, label: key });
     }
 
     const out=[];
     out.push('STAAD SPACE');
     out.push('START JOB INFORMATION');
-    out.push('ENGINEER DATE 05-Feb-2026');
+    out.push('ENGINEER NAME CIVILARCHI');
+    out.push(`ENGINEER DATE 05-Feb-2026`);
     out.push('END JOB INFORMATION');
-    out.push('UNIT METER KN');
+    out.push(U.unitLine);
+
     out.push('JOINT COORDINATES');
     for(const [k,no] of joints.entries()){
       const [x,y,z]=k.split(',').map(Number);
-      out.push(`${no} ${ (x/1000).toFixed(6) } ${ (z/1000).toFixed(6) } ${ (y/1000).toFixed(6) }`);
+      // STAAD axis: X Y Z. We map our mm coords (x,y,z) as X, Z->Y, Y->Z for consistency with previous export.
+      out.push(`${no} ${ U.toLen(x).toFixed(6) } ${ U.toLen(z).toFixed(6) } ${ U.toLen(y).toFixed(6) }`);
     }
+
     out.push('MEMBER INCIDENCES');
     for(const m of members){
       out.push(`${m.no} ${m.n1} ${m.n2}`);
     }
-    out.push('* NOTE: Member properties are not exported yet (geometry only).');
+
+    if(matMode !== 'NONE'){
+      out.push('CONSTANTS');
+      out.push(`MATERIAL ${matMode} ALL`);
+    }
+
+    // Groups
+    if(grpMode !== 'NONE'){
+      const groupLines=[];
+      const addGroup = (name, nums)=>{
+        if(!nums.length) return;
+        groupLines.push(`GROUP ${name}`);
+        // wrap member numbers
+        const chunk=[];
+        for(const n of nums){
+          chunk.push(n);
+          if(chunk.length>=10){
+            groupLines.push(`MEMBER ${chunk.join(' ')}`);
+            chunk.length=0;
+          }
+        }
+        if(chunk.length) groupLines.push(`MEMBER ${chunk.join(' ')}`);
+      };
+
+      if(grpMode==='ROLE' || grpMode==='BOTH'){
+        const roles = {};
+        for(const m of members){
+          const r = (m.role||'').toUpperCase();
+          (roles[r] ||= []).push(m.no);
+        }
+        for(const [r, nums] of Object.entries(roles)) addGroup(`ROLE_${r}`, nums);
+      }
+      if(grpMode==='PROFILE' || grpMode==='BOTH'){
+        const ps = {};
+        for(const m of members){
+          const p = (m.profLabel||'').replaceAll(' ','_').replaceAll('/','_').slice(0,24);
+          (ps[p] ||= []).push(m.no);
+        }
+        for(const [p, nums] of Object.entries(ps)) addGroup(`PROF_${p}`, nums);
+      }
+
+      if(groupLines.length){
+        out.push('* MEMBER GROUPS');
+        out.push(...groupLines);
+      }
+    }
+
+    // Member properties (PRIS - rectangle approximation)
+    out.push('MEMBER PROPERTY');
+    for(const [key, dim] of profMap.entries()){
+      const label = key; // shape|name
+      const nums = members.filter(m=>`${m.shapeKey}|${m.profLabel}`===label).map(m=>m.no);
+      if(!nums.length) continue;
+      const yd = U.toLen(dim.d).toFixed(6);
+      const zd = U.toLen(dim.b).toFixed(6);
+      // PRIS YD ZD (rectangle) - best effort
+      out.push(`PRIS YD ${yd} ZD ${zd} ${nums.join(' ')}`);
+    }
+
     out.push('FINISH');
 
     downloadText('civilarchi.staad.std', out.join('\n'));

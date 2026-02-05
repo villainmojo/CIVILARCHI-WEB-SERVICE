@@ -162,6 +162,7 @@ label.inline input{width:auto}
 /* buttons */
 .btns{display:flex; gap:10px; flex-wrap:wrap}
 .export-bar{display:flex; gap:10px; flex-wrap:wrap}
+.export-opts{padding: 10px 12px; border: 1px solid rgba(31,42,68,0.14); border-radius: 14px; background: rgba(255,255,255,0.55)}
 .btn{
   cursor:pointer;
   border-radius: 12px;
