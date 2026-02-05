@@ -57,6 +57,14 @@ const els = {
   subCount: () => document.getElementById('drSubCount'),
   joistEnable: () => document.getElementById('drJoistEnable'),
 
+  braceToggle: () => document.getElementById('drBraceToggle'),
+  bracePanel: () => document.getElementById('drBracePanel'),
+  braceExit: () => document.getElementById('drBraceExit'),
+  braceType: () => document.getElementById('drBraceType'),
+  braceShape: () => document.getElementById('drBraceShape'),
+  braceSize: () => document.getElementById('drBraceSize'),
+  braceHint: () => document.getElementById('drBraceHint'),
+
   copy: () => document.getElementById('drCopy'),
 
   qtyRows: () => document.getElementById('drQtyRows'),
@@ -84,7 +92,16 @@ const state = {
   selectedIds: new Set(),
   matGray: null,
   matSelected: null,
+
+  braceMode: false,
+  bracePlaneGroup: null,
+  braceGroup: null,
+  braceType: 'X',
+  braceProfile: null,
 };
+
+/** @type {Array<{id:string, faceKey:string, kind:'X'|'S', stdKey:string, shapeKey:string, sizeKey:string, name:string, kgm:number|null, a:{x:number,y:number,z:number}, b:{x:number,y:number,z:number}, c?:{x:number,y:number,z:number}, d?:{x:number,y:number,z:number}}>} */
+const braces = [];
 
 /** @type {Record<string, {shapeKey:string, sizeKey:string}>} */
 const overrides = {};
@@ -190,6 +207,12 @@ function getProfileBy(shapeKey, sizeKey){
   return { stdKey, shapeKey, sizeKey, item, kgm: item?.kgm ?? null, name: item?.name ?? '' };
 }
 
+function getProfileFromSelectors(shapeSel, sizeSel){
+  const shapeKey = shapeSel?.value || 'H';
+  const sizeKey = sizeSel?.value || '';
+  return getProfileBy(shapeKey, sizeKey);
+}
+
 function getProfile(role){
   const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
   const stdKey = els.stdAll()?.value || 'KS';
@@ -292,13 +315,22 @@ function ensureThree() {
     }
   }
 
-  // Selection (Shift: multi)
+  // Selection / Brace mode click
   state.renderer.domElement.addEventListener('pointerdown', (ev)=>{
     const rect = state.renderer.domElement.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
     state.pointer.set(x,y);
     state.raycaster.setFromCamera(state.pointer, state.camera);
+
+    if(state.braceMode){
+      const hits = state.raycaster.intersectObjects(state.bracePlaneGroup.children, false);
+      const hit = hits[0]?.object || null;
+      if(hit && hit.userData?.faceKey){
+        window.dispatchEvent(new CustomEvent('civilarchi:draft:braceFace', { detail: hit.userData }));
+      }
+      return;
+    }
 
     const hits = state.raycaster.intersectObjects(state.memberGroup.children, false);
     const hit = hits[0]?.object || null;
@@ -329,8 +361,12 @@ function ensureThree() {
 
   state.gridGroup = new THREE.Group();
   state.memberGroup = new THREE.Group();
+  state.bracePlaneGroup = new THREE.Group();
+  state.braceGroup = new THREE.Group();
   state.root.add(state.gridGroup);
   state.root.add(state.memberGroup);
+  state.root.add(state.bracePlaneGroup);
+  state.root.add(state.braceGroup);
 
   const resize = () => {
     const rect = canvasWrap.getBoundingClientRect();
@@ -364,9 +400,6 @@ function fmtLoadKgTon(kg){
 function renderQty(d) {
   const rowsEl = els.qtyRows();
   if (!rowsEl) return;
-
-  const colLenM = mmToM(d.colLenMm);
-  const beamLenM = mmToM(d.beamLenMm);
 
   /** @type {Map<string, {cat:string, member:string, len:number, count:number, loadKg:number|null}>} */
   const g = new Map();
@@ -470,27 +503,78 @@ function renderQty(d) {
     const sizeXmm = d.xPosMm[d.xPosMm.length-1] || 0;
     const sizeYmm = d.yPosMm[d.yPosMm.length-1] || 0;
 
+    // subbeam lines positions inside bays (mm)
+    const yLines = [];
+    if(subAlongX){
+      for(let bayY=0; bayY<d.ny-1; bayY++){
+        const y0 = d.yPosMm[bayY] || 0;
+        const y1 = d.yPosMm[bayY+1] || 0;
+        yLines.push(y0, y1);
+        for(let k=1; k<=d.subCountPerBay; k++){
+          yLines.push(y0 + (k/(d.subCountPerBay+1))*(y1-y0));
+        }
+      }
+    } else {
+      // when subbeams along Y, joists along X, so boundaries in X
+    }
+
+    const xLines = [];
+    if(!subAlongX){
+      for(let bayX=0; bayX<d.nx-1; bayX++){
+        const x0 = d.xPosMm[bayX] || 0;
+        const x1 = d.xPosMm[bayX+1] || 0;
+        xLines.push(x0, x1);
+        for(let k=1; k<=d.subCountPerBay; k++){
+          xLines.push(x0 + (k/(d.subCountPerBay+1))*(x1-x0));
+        }
+      }
+    }
+
+    const uniqSort = (arr)=>[...new Set(arr.map(v=>Math.round(v*1000)/1000))].sort((a,b)=>a-b);
+
     for(const z of d.levelsMm){
       if(subAlongX){
-        // Joist along Y, spaced in X, within each X bay
+        const ys = uniqSort(yLines.length?yLines:[0,sizeYmm]);
+        // joists run along Y, spaced in X within each bayX; length is between adjacent y-lines (beam/subbeam)
         for(let bayX=0; bayX<d.nx-1; bayX++){
           const x0 = d.xPosMm[bayX] || 0;
           const x1 = d.xPosMm[bayX+1] || 0;
-          for(let x=x0+step; x < x1; x+=step){
-            const lenM = mmToM(sizeYmm);
-            add('Joist', profJ, lenM);
+          for(let xmm=x0+step; xmm < x1; xmm += step){
+            for(let j=0; j<ys.length-1; j++){
+              const segLenM = mmToM(ys[j+1]-ys[j]);
+              add('Joist', profJ, segLenM);
+            }
           }
         }
       } else {
-        // Joist along X, spaced in Y, within each Y bay
+        const xs = uniqSort(xLines.length?xLines:[0,sizeXmm]);
+        // joists run along X, spaced in Y within each bayY; length between adjacent x-lines
         for(let bayY=0; bayY<d.ny-1; bayY++){
           const y0 = d.yPosMm[bayY] || 0;
           const y1 = d.yPosMm[bayY+1] || 0;
-          for(let y=y0+step; y < y1; y+=step){
-            const lenM = mmToM(sizeXmm);
-            add('Joist', profJ, lenM);
+          for(let ymm=y0+step; ymm < y1; ymm += step){
+            for(let j=0; j<xs.length-1; j++){
+              const segLenM = mmToM(xs[j+1]-xs[j]);
+              add('Joist', profJ, segLenM);
+            }
           }
         }
+      }
+    }
+  }
+
+  // Braces
+  if(braces.length){
+    for(const br of braces){
+      const prof = { shapeKey: br.shapeKey, sizeKey: br.sizeKey, name: br.name, kgm: br.kgm ?? null };
+      const lenMm = (p,q)=>Math.sqrt((p.x-q.x)**2 + (p.y-q.y)**2 + (p.z-q.z)**2);
+      if(br.kind==='X'){
+        add('Brace', prof, mmToM(lenMm(br.a, br.b)));
+        add('Brace', prof, mmToM(lenMm(br.c, br.d)));
+      } else {
+        const topMid = { x: (br.c.x+br.b.x)/2, y: (br.c.y+br.b.y)/2, z: br.c.z };
+        add('Brace', prof, mmToM(lenMm(br.d, topMid)));
+        add('Brace', prof, mmToM(lenMm(br.a, topMid)));
       }
     }
   }
@@ -534,6 +618,8 @@ function rebuild() {
 
   clearGroup(state.gridGroup);
   clearGroup(state.memberGroup);
+  clearGroup(state.bracePlaneGroup);
+  clearGroup(state.braceGroup);
 
   // center model
   const sizeX = d.xPosMm[d.xPosMm.length-1] || 0;
@@ -568,6 +654,74 @@ function rebuild() {
     const m = String(name||'').match(/C\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
     if(!m) return null;
     return { H: parseFloat(m[1]), B: parseFloat(m[2]), tw: parseFloat(m[3]), tf: parseFloat(m[4]) };
+  }
+
+  function parseL(name){
+    // Name like: "L 75x75x6" (sometimes L 75x50x6)
+    const m = String(name||'').match(/\bL\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
+    if(!m) return null;
+    return { A: parseFloat(m[1]), B: parseFloat(m[2]), t: parseFloat(m[3]) };
+  }
+
+  function parseT(name){
+    // Name like: "T 100x100x10x6" (H x B x tw x tf) (best-effort)
+    const m = String(name||'').match(/\bT\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
+    if(!m) return null;
+    return { H: parseFloat(m[1]), B: parseFloat(m[2]), tw: parseFloat(m[3]), tf: parseFloat(m[4]) };
+  }
+
+  function makeLGeomForBeamX(lenM, dim){
+    const A = mmToM(dim.A);
+    const B = mmToM(dim.B);
+    const t = mmToM(dim.t);
+    const leg1 = new THREE.BoxGeometry(lenM, t, A);
+    leg1.translate(0, 0, (A/2 - t/2));
+    const leg2 = new THREE.BoxGeometry(lenM, B, t);
+    leg2.translate(0, (B/2 - t/2), 0);
+    return mergeGeometries([leg1, leg2], false);
+  }
+  function makeLGeomForBeamY(lenM, dim){
+    const g = makeLGeomForBeamX(lenM, dim);
+    g.rotateY(Math.PI/2);
+    return g;
+  }
+  function makeLGeomForColumn(heightM, dim){
+    const A = mmToM(dim.A);
+    const B = mmToM(dim.B);
+    const t = mmToM(dim.t);
+    const leg1 = new THREE.BoxGeometry(t, heightM, A);
+    leg1.translate(-B/2 + t/2, 0, 0);
+    const leg2 = new THREE.BoxGeometry(B, heightM, t);
+    leg2.translate(0, 0, -A/2 + t/2);
+    return mergeGeometries([leg1, leg2], false);
+  }
+
+  function makeTGeomForBeamX(lenM, dim){
+    const B = mmToM(dim.B);
+    const H = mmToM(dim.H);
+    const tf = mmToM(dim.tf);
+    const tw = mmToM(dim.tw);
+    const flange = new THREE.BoxGeometry(lenM, tf, B);
+    flange.translate(0, H/2 - tf/2, 0);
+    const web = new THREE.BoxGeometry(lenM, Math.max(0.001, H - tf), Math.max(0.001, tw));
+    web.translate(0, (H - tf)/2 - H/2, 0);
+    return mergeGeometries([flange, web], false);
+  }
+  function makeTGeomForBeamY(lenM, dim){
+    const g = makeTGeomForBeamX(lenM, dim);
+    g.rotateY(Math.PI/2);
+    return g;
+  }
+  function makeTGeomForColumn(heightM, dim){
+    const B = mmToM(dim.B);
+    const H = mmToM(dim.H);
+    const tf = mmToM(dim.tf);
+    const tw = mmToM(dim.tw);
+    const flange = new THREE.BoxGeometry(B, heightM, tf);
+    flange.translate(0, 0, H/2 - tf/2);
+    const web = new THREE.BoxGeometry(Math.max(0.001, tw), heightM, Math.max(0.001, H - tf));
+    web.translate(0, 0, (H - tf)/2 - H/2);
+    return mergeGeometries([flange, web], false);
   }
 
   function makeCGeomForBeamX(lenM, dimMm){
@@ -650,6 +804,7 @@ function rebuild() {
   // materials (gray + selected)
   if(!state.matGray) state.matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
   if(!state.matSelected) state.matSelected = new THREE.MeshStandardMaterial({ color: 0x3A6EA5, roughness: 0.75, metalness: 0.10, emissive: 0x0b2a4a, emissiveIntensity: 0.25 });
+  const matFace = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.08, depthWrite: false });
 
   const colBase = effectiveProfile(d.profileCol, null);
   const beamBase = effectiveProfile(d.profileBeam, null);
@@ -676,15 +831,86 @@ function rebuild() {
       const b = mmToM(dim?.B ?? (colHdim?.B ?? 200));
       const dd = mmToM(dim?.H ?? (colHdim?.H ?? 200));
       const cdim = (prof.shapeKey === 'C') ? parseC(prof.name) : null;
+      const ldim = (prof.shapeKey === 'L') ? parseL(prof.name) : null;
+      const tdim = (prof.shapeKey === 'T') ? parseT(prof.name) : null;
       const geom = (dim && prof.shapeKey==='H')
         ? makeHGeomForColumn(h || 0.001, dim)
         : (cdim && prof.shapeKey==='C')
           ? makeCGeomForColumn(h || 0.001, cdim)
-          : new THREE.BoxGeometry(b, h || 0.001, dd);
+          : (ldim && prof.shapeKey==='L')
+            ? makeLGeomForColumn(h || 0.001, ldim)
+            : (tdim && prof.shapeKey==='T')
+              ? makeTGeomForColumn(h || 0.001, tdim)
+              : new THREE.BoxGeometry(b, h || 0.001, dd);
       const mesh = new THREE.Mesh(geom, state.matGray);
       mesh.userData = { id, role: 'col', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
       mesh.position.copy(toV(x, y, d.heightMm / 2));
       state.memberGroup.add(mesh);
+    }
+  }
+
+  // brace selectable faces (rectangles between grids and levels)
+  // We create vertical faces for each bay segment between consecutive levels.
+  const levels = [0, ...d.levelsMm];
+  for(let li=0; li<levels.length-1; li++){
+    const z0 = levels[li];
+    const z1 = levels[li+1];
+
+    // faces parallel to XZ at each Y gridline bay (between y[i]..y[i+1]) located at each y gridline? We'll do bay faces at fixed y for each row and each X span.
+    for(let iy=0; iy<d.ny; iy++){
+      const y = d.yPosMm[iy] || 0;
+      for(let ix=0; ix<d.nx-1; ix++){
+        const x0 = d.xPosMm[ix] || 0;
+        const x1 = d.xPosMm[ix+1] || 0;
+        // face on line y (between columns) spanning x0..x1 and z0..z1
+        const w = mmToM(x1-x0);
+        const hface = mmToM(z1-z0);
+        const geom = new THREE.PlaneGeometry(w||0.001, hface||0.001);
+        const mesh = new THREE.Mesh(geom, matFace);
+        // PlaneGeometry is in XY; map X->X, Y->Z, face normal +Z; rotate to stand vertical facing +Y
+        mesh.rotation.x = -Math.PI/2;
+        mesh.position.copy(toV((x0+x1)/2, y, (z0+z1)/2));
+
+        const faceKey = `F_Y_${iy}_${ix}_${z0}_${z1}`;
+        mesh.userData = {
+          faceKey,
+          corners: {
+            a: { x: x0, y, z: z0 },
+            b: { x: x1, y, z: z1 },
+            c: { x: x0, y, z: z1 },
+            d: { x: x1, y, z: z0 },
+          },
+        };
+        state.bracePlaneGroup.add(mesh);
+      }
+    }
+
+    // faces parallel to YZ at each X gridline
+    for(let ix=0; ix<d.nx; ix++){
+      const x = d.xPosMm[ix] || 0;
+      for(let iy=0; iy<d.ny-1; iy++){
+        const y0 = d.yPosMm[iy] || 0;
+        const y1 = d.yPosMm[iy+1] || 0;
+        const w = mmToM(y1-y0);
+        const hface = mmToM(z1-z0);
+        const geom = new THREE.PlaneGeometry(w||0.001, hface||0.001);
+        const mesh = new THREE.Mesh(geom, matFace);
+        mesh.rotation.y = Math.PI/2;
+        mesh.rotation.x = -Math.PI/2;
+        mesh.position.copy(toV(x, (y0+y1)/2, (z0+z1)/2));
+
+        const faceKey = `F_X_${ix}_${iy}_${z0}_${z1}`;
+        mesh.userData = {
+          faceKey,
+          corners: {
+            a: { x, y: y0, z: z0 },
+            b: { x, y: y1, z: z1 },
+            c: { x, y: y0, z: z1 },
+            d: { x, y: y1, z: z0 },
+          },
+        };
+        state.bracePlaneGroup.add(mesh);
+      }
     }
   }
 
@@ -702,11 +928,17 @@ function rebuild() {
         const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
         const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
         const cdim = (prof.shapeKey === 'C') ? parseC(prof.name) : null;
+        const ldim = (prof.shapeKey === 'L') ? parseL(prof.name) : null;
+        const tdim = (prof.shapeKey === 'T') ? parseT(prof.name) : null;
         const geom = (dim && prof.shapeKey==='H')
           ? makeHGeomForBeamX(len || 0.001, dim)
           : (cdim && prof.shapeKey==='C')
             ? makeCGeomForBeamX(len || 0.001, cdim)
-            : new THREE.BoxGeometry(len || 0.001, dd, b);
+            : (ldim && prof.shapeKey==='L')
+              ? makeLGeomForBeamX(len || 0.001, ldim)
+              : (tdim && prof.shapeKey==='T')
+                ? makeTGeomForBeamX(len || 0.001, tdim)
+                : new THREE.BoxGeometry(len || 0.001, dd, b);
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const y = d.yPosMm[iy] || 0;
@@ -728,11 +960,17 @@ function rebuild() {
         const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
         const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
         const cdim = (prof.shapeKey === 'C') ? parseC(prof.name) : null;
+        const ldim = (prof.shapeKey === 'L') ? parseL(prof.name) : null;
+        const tdim = (prof.shapeKey === 'T') ? parseT(prof.name) : null;
         const geom = (dim && prof.shapeKey==='H')
           ? makeHGeomForBeamY(len || 0.001, dim)
           : (cdim && prof.shapeKey==='C')
             ? makeCGeomForBeamY(len || 0.001, cdim)
-            : new THREE.BoxGeometry(b, dd, len || 0.001);
+            : (ldim && prof.shapeKey==='L')
+              ? makeLGeomForBeamY(len || 0.001, ldim)
+              : (tdim && prof.shapeKey==='T')
+                ? makeTGeomForBeamY(len || 0.001, tdim)
+                : new THREE.BoxGeometry(b, dd, len || 0.001);
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const x = d.xPosMm[ix] || 0;
@@ -856,6 +1094,42 @@ function rebuild() {
     }
   }
 
+  // braces render
+  const braceMat = new THREE.MeshStandardMaterial({ color: 0x666a73, roughness: 0.78, metalness: 0.08 });
+  function addBraceMember(p0, p1, prof){
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const dz = p1.z - p0.z;
+    const lenMm = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    const len = mmToM(lenMm);
+    // thickness from profile (rough)
+    const dimH = (prof.shapeKey==='H') ? parseH(prof.name) : (prof.shapeKey==='C') ? parseC(prof.name) : null;
+    const t = mmToM(dimH?.tw ?? dimH?.tf ?? 8);
+    const geom = new THREE.BoxGeometry(len||0.001, t*2, t*2);
+    const mesh = new THREE.Mesh(geom, braceMat);
+    // position mid
+    mesh.position.copy(toV((p0.x+p1.x)/2, (p0.y+p1.y)/2, (p0.z+p1.z)/2));
+    // orient along vector in world coords: our axes mapping is (x->X), (y->Z), (z->Y) in toV
+    const v = new THREE.Vector3(mmToM(dx), mmToM(dz), mmToM(dy));
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1,0,0), v.clone().normalize());
+    mesh.setRotationFromQuaternion(q);
+    state.braceGroup.add(mesh);
+    return lenMm;
+  }
+
+  for(const br of braces){
+    const prof = { stdKey: br.stdKey, shapeKey: br.shapeKey, sizeKey: br.sizeKey, name: br.name, kgm: br.kgm ?? null };
+    if(br.kind==='X'){
+      addBraceMember(br.a, br.b, prof);
+      addBraceMember(br.c, br.d, prof);
+    } else {
+      // chevron: bottom corners -> top mid
+      const topMid = { x: (br.c.x+br.b.x)/2, y: (br.c.y+br.b.y)/2, z: br.c.z };
+      addBraceMember(br.d, topMid, prof);
+      addBraceMember(br.a, topMid, prof);
+    }
+  }
+
   // frame camera
   const radius = mmToM(Math.max(sizeX, sizeY, d.heightMm)) * 0.9 + 2;
   state.camera.position.set(radius, radius * 0.85, radius);
@@ -905,6 +1179,7 @@ function fillProfileSelectors(){
 
   const STD_LABEL = { KS: 'KR · KS', JIS: 'JP · JIS' };
   const SHAPE_KEYS = ['H','C','L','LC','Rect','I','T'];
+  // brace uses same shape keys (we implement H/C/L/T visually)
 
   // standards
   stdAll.innerHTML='';
@@ -943,17 +1218,28 @@ function fillProfileSelectors(){
     if(preferred) sizeSel.value = preferred.key;
   }
 
+  const braceShape = els.braceShape?.();
+  const braceSize = els.braceSize?.();
+
   function rebuildAll(){
     rebuildShapeSelect(colShape);
     rebuildShapeSelect(beamShape);
     rebuildShapeSelect(subShape);
+    braceShape && rebuildShapeSelect(braceShape);
+
     rebuildSizeSelect(colShape, colSize);
     rebuildSizeSelect(beamShape, beamSize);
     rebuildSizeSelect(subShape, subSize);
+    braceShape && braceSize && rebuildSizeSelect(braceShape, braceSize);
 
     // default OFF
     if(!subEnable.value) subEnable.value = '0';
     if(!joistEnable.value) joistEnable.value = '0';
+
+    // brace defaults
+    if(braceShape && braceSize){
+      if(!braceShape.value) braceShape.value = 'L';
+    }
   }
 
   rebuildAll();
@@ -970,6 +1256,54 @@ function fillProfileSelectors(){
   subEnable.addEventListener('change', rebuild);
   subCount.addEventListener('input', rebuild);
   joistEnable.addEventListener('change', rebuild);
+
+  // brace selectors may not exist (if DOM not loaded yet)
+  const brShape = els.braceShape?.();
+  const brSize = els.braceSize?.();
+  const brType = els.braceType?.();
+  brShape?.addEventListener('change', ()=>{ rebuildSizeSelect(brShape, brSize); state.braceProfile = getProfileFromSelectors(brShape, brSize); });
+  brSize?.addEventListener('change', ()=>{ state.braceProfile = getProfileFromSelectors(brShape, brSize); });
+  brType?.addEventListener('change', ()=>{ state.braceType = brType.value === 'S' ? 'S' : 'X'; });
+
+  // initialize
+  if(brShape && brSize) state.braceProfile = getProfileFromSelectors(brShape, brSize);
+  if(brType) state.braceType = brType.value === 'S' ? 'S' : 'X';
+}
+
+function initBraceUI(){
+  const btn = els.braceToggle();
+  const panel = els.bracePanel();
+  const exit = els.braceExit();
+  const hint = els.braceHint();
+
+  function setMode(on){
+    state.braceMode = !!on;
+    if(panel) panel.hidden = !state.braceMode;
+    if(hint) hint.textContent = state.braceMode ? '면을 클릭하면 브레이스가 생성됩니다. (X 또는 ㅅ 선택)' : '';
+  }
+
+  btn && (btn.onclick = ()=>{
+    setMode(!state.braceMode);
+  });
+  exit && (exit.onclick = ()=> setMode(false));
+
+  // face click handler
+  window.addEventListener('civilarchi:draft:braceFace', (e)=>{
+    const face = e.detail;
+    if(!face?.faceKey) return;
+    const prof = state.braceProfile || getProfileBy('L','');
+
+    // Prevent duplicates on same face+kind
+    const key = `${face.faceKey}|${state.braceType}|${prof.stdKey}|${prof.shapeKey}|${prof.sizeKey}`;
+    if(braces.some(b=>`${b.faceKey}|${b.kind}|${b.stdKey}|${b.shapeKey}|${b.sizeKey}`===key)) return;
+
+    const id = `BR_${braces.length+1}`;
+    const b = { id, faceKey: face.faceKey, kind: state.braceType, stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name || prof.sizeKey, kgm: prof.kgm ?? null, ...face.corners };
+    braces.push(b);
+    rebuild();
+  });
+
+  setMode(false);
 }
 
 function initSelectionUI(){
@@ -1139,6 +1473,7 @@ function wire() {
 
   initLevels();
   fillProfileSelectors();
+  initBraceUI();
   initSelectionUI();
 
   [els.gridX(), els.gridY(), els.spacingX(), els.spacingY(), els.spansX(), els.spansY()].forEach((el) => {
