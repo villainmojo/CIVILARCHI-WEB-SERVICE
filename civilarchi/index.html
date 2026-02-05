@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0205" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0216" />
 </head>
 <body>
   <header class="top">
@@ -30,8 +30,7 @@
     <div class="app">
       <aside class="sidebar">
         <div class="sb-title">기능</div>
-        <a class="sb-item active" href="#home" data-view="home">홈</a>
-        <a class="sb-item" href="#hbeam" data-view="hbeam">H-beam 중량(kg/m)</a>
+        <a class="sb-item" href="#hbeam" data-view="hbeam">단위중량 계산</a>
 
         <div class="sb-title">시스템</div>
         <div class="sb-box">
@@ -49,30 +48,53 @@
       <section class="content">
         <!-- HOME VIEW -->
         <section class="view" data-view="home">
-          <div class="hero">
-            <h1>토목·건축 엔지니어용 웹페이지</h1>
-            <p class="muted">
-              이 프로젝트는 <code>/civilarchi/</code> 경로로 독립 배포됩니다. (DB 없음)
-            </p>
-          </div>
-
-          <div class="cards">
-            <article class="card">
-              <h2>빠른 실행</h2>
-              <div class="btns">
-                <button class="btn primary" data-goto="hbeam">H-beam 중량 계산</button>
+          <section class="home-hero">
+            <div class="home-hero-bg"></div>
+            <div class="home-hero-inner">
+              <div class="home-title">
+                <div class="home-kicker">CIVIL · ARCHI</div>
+                <h1>엔지니어를 위한 빠른 계산 · 표준 · 체크</h1>
+                <p class="muted">
+                  토목/건축 실무에서 바로 꺼내 쓰는 작은 도구들을 모읍니다.
+                </p>
               </div>
-              <p class="muted small">홈 화면은 기능 버튼을 배치하는 허브로 사용합니다.</p>
-            </article>
 
-            <article class="card">
-              <h2>디자인 원칙</h2>
-              <ul>
-                <li>채도 낮게(신뢰/구조/안정)</li>
-                <li>색은 ‘상태 전달’에만 사용 (PASS/WARN/FAIL)</li>
-              </ul>
-            </article>
-          </div>
+              <div class="quick">
+                <div class="quick-title">빠른 실행</div>
+                <div class="quick-grid">
+                  <button class="quick-card" data-goto="hbeam">
+                    <div class="qc-top">
+                      <div class="qc-icon">Σ</div>
+                      <div class="qc-name">단위중량 계산</div>
+                    </div>
+                    <div class="qc-desc">KS/JIS · 형강/강관/앵글 등 · kg/m → kg, ton</div>
+                  </button>
+
+                  <button class="quick-card" disabled>
+                    <div class="qc-top">
+                      <div class="qc-icon">↗</div>
+                      <div class="qc-name">(준비중) 단위 변환</div>
+                    </div>
+                    <div class="qc-desc">길이/면적/압력/힘</div>
+                  </button>
+
+                  <button class="quick-card" disabled>
+                    <div class="qc-top">
+                      <div class="qc-icon">📄</div>
+                      <div class="qc-name">(준비중) 규격/링크</div>
+                    </div>
+                    <div class="qc-desc">표준/참고자료 링크 모음</div>
+                  </button>
+                </div>
+
+                <div class="home-meta">
+                  <div class="meta-item"><span class="dot ok"></span> 상태는 색으로 전달</div>
+                  <div class="meta-item"><span class="dot neutral"></span> 채도는 낮게</div>
+                  <div class="meta-item"><span class="dot steel"></span> 버튼/선택은 Steel Blue</div>
+                </div>
+              </div>
+            </div>
+          </section>
         </section>
 
         <!-- HBEAM VIEW -->
@@ -141,6 +163,10 @@
                   <div class="k">총 중량</div>
                   <div class="v"><span id="hbTotal" class="mono">-</span> <span class="muted">kg</span></div>
                 </div>
+                <div class="kv">
+                  <div class="k">총 중량</div>
+                  <div class="v"><span id="hbTotalTon" class="mono">-</span> <span class="muted">ton</span></div>
+                </div>
 
                 <div id="hbMsg" class="notice" hidden></div>
               </div>
@@ -160,6 +186,6 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0210"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0216"></script>
 </body>
 </html>

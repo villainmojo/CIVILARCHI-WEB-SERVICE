@@ -27,10 +27,16 @@
     sbItems.forEach(a => a.classList.toggle('active', a.getAttribute('data-view') === view));
   }
 
+  function applyLayout(view){
+    // Sidebar only for tool views
+    document.body.setAttribute('data-view', view);
+  }
+
   function showView(view){
     for(const [k, el] of views.entries()){
       el.hidden = (k !== view);
     }
+    applyLayout(view);
     setActiveNav(view);
   }
 
@@ -85,6 +91,7 @@
 
   const hbKgm = document.getElementById('hbKgm');
   const hbTotal = document.getElementById('hbTotal');
+  const hbTotalTon = document.getElementById('hbTotalTon');
   const hbMsg = document.getElementById('hbMsg');
   const hbCopy = document.getElementById('hbCopy');
 
@@ -170,7 +177,7 @@
   }
 
   function compute(){
-    if(!hbKgm || !hbTotal) return;
+    if(!hbKgm || !hbTotal || !hbTotalTon) return;
 
     const L = Math.max(0, parseFloat(hbLength?.value || '0') || 0);
     const useCustom = !!hbUseCustom?.checked;
@@ -188,13 +195,17 @@
     if(kgm == null){
       hbKgm.textContent = '-';
       hbTotal.textContent = '-';
+      hbTotalTon.textContent = '-';
       setMsg('선택한 규격/종류/사이즈의 단위중량(kg/m)을 찾지 못했습니다. “사용자 직접 입력(kg/m)”을 켜서 계산하거나, 엑셀 데이터/항목을 확인해주세요.');
       return;
     }
 
-    const total = kgm * L;
+    const totalKg = kgm * L;
+    const totalTon = totalKg / 1000;
+
     hbKgm.textContent = fmt(kgm, 3);
-    hbTotal.textContent = fmt(total, 3);
+    hbTotal.textContent = fmt(totalKg, 3);
+    hbTotalTon.textContent = fmt(totalTon, 6);
     setMsg('');
   }
 
@@ -229,7 +240,7 @@
     hbCopy?.addEventListener('click', async ()=>{
       const { stdKey, shapeKey, item } = getSelected();
       const L = Math.max(0, parseFloat(hbLength?.value || '0') || 0);
-      const text = `CIVILARCHI 단위중량 계산\n- standard: ${stdKey || '-'}\n- shape: ${shapeKey || '-'}\n- size: ${item?.key || '-'}\n- length(m): ${L}\n- kg/m: ${hbKgm.textContent}\n- total(kg): ${hbTotal.textContent}`;
+      const text = `CIVILARCHI 단위중량 계산\n- standard: ${stdKey || '-'}\n- shape: ${shapeKey || '-'}\n- size: ${item?.key || '-'}\n- length(m): ${L}\n- kg/m: ${hbKgm.textContent}\n- total(kg): ${hbTotal.textContent}\n- total(ton): ${hbTotalTon.textContent}`;
       try{
         await navigator.clipboard.writeText(text);
         setMsg('클립보드에 복사했습니다.');
