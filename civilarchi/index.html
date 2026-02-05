@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0243" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0251" />
 </head>
 <body>
   <header class="top">
@@ -233,31 +233,39 @@
             </div>
           </div>
 
-          <div class="draft">
-            <aside class="draft-panel">
-              <div class="card" style="box-shadow:none">
-                <h2>그리드</h2>
-                <div class="form">
-                  <label><span>Grid X (가로 개수)</span><input id="drGridX" type="number" min="1" step="1" value="4" /></label>
-                  <label><span>Grid Y (세로 개수)</span><input id="drGridY" type="number" min="1" step="1" value="3" /></label>
-                  <label><span>X 간격 (mm)</span><input id="drSpacingX" type="number" min="1" step="1" value="6000" /></label>
-                  <label><span>Y 간격 (mm)</span><input id="drSpacingY" type="number" min="1" step="1" value="6000" /></label>
-                </div>
-              </div>
+          <div class="draft-stack">
+            <section class="draft-canvas-wrap">
+              <div class="draft-canvas" id="drCanvas"></div>
+            </section>
 
-              <div class="card" style="box-shadow:none; margin-top:12px">
-                <h2>레벨</h2>
-                <div class="form">
-                  <div id="drLevels"></div>
-                  <div class="btns">
-                    <button class="btn" id="drAddLevel">레벨 추가</button>
+            <section class="draft-settings">
+              <div class="cards draft-cards">
+                <article class="card">
+                  <h2>그리드</h2>
+                  <div class="form">
+                    <label><span>Grid X (가로 개수)</span><input id="drGridX" type="number" min="1" step="1" value="4" /></label>
+                    <label><span>Grid Y (세로 개수)</span><input id="drGridY" type="number" min="1" step="1" value="3" /></label>
+                    <label><span>X 간격 (mm)</span><input id="drSpacingX" type="number" min="1" step="1" value="6000" /></label>
+                    <label><span>Y 간격 (mm)</span><input id="drSpacingY" type="number" min="1" step="1" value="6000" /></label>
                   </div>
-                  <div class="hint">각 레벨 높이(mm)를 누적해서 기둥/빔이 생성됩니다.</div>
-                </div>
-              </div>
+                </article>
 
-              <div class="card" style="box-shadow:none; margin-top:12px">
-                <h2>물량(길이)</h2>
+                <article class="card">
+                  <h2>레벨</h2>
+                  <div class="form">
+                    <div id="drLevels"></div>
+                    <div class="btns">
+                      <button class="btn" id="drAddLevel">레벨 추가</button>
+                    </div>
+                    <div class="hint">각 레벨 높이(mm)를 누적해서 기둥/빔이 생성됩니다.</div>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="draft-qty">
+              <div class="card" style="margin-top:0">
+                <h2>전체 물량(길이)</h2>
                 <div class="result">
                   <div class="kv"><div class="k">기둥 수량</div><div class="v mono" id="drColCount">-</div></div>
                   <div class="kv"><div class="k">기둥 총 길이</div><div class="v"><span class="mono" id="drColLenM">-</span> <span class="muted">m</span></div></div>
@@ -271,10 +279,6 @@
                 </div>
                 <div class="hint">(MVP) 3D는 개념 모델입니다. 부재 단면 형상은 추후 프로파일/데이터시트 기반으로 확장합니다.</div>
               </div>
-            </aside>
-
-            <section class="draft-canvas-wrap">
-              <div class="draft-canvas" id="drCanvas"></div>
             </section>
           </div>
         </section>
@@ -287,7 +291,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0248"></script>
-  <script type="module" src="/civilarchi/assets/draft.mjs?v=20260205_0248"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0251"></script>
+  <script type="module" src="/civilarchi/assets/draft.mjs?v=20260205_0251"></script>
 </body>
 </html>

@@ -222,15 +222,14 @@ label.inline input{width:auto}
 }
 
 /* Draft */
-.draft{display:grid; grid-template-columns: 380px 1fr; gap:14px; align-items:stretch; margin-top:12px}
-.draft-panel{position:sticky; top:78px; align-self:start}
-.draft-canvas-wrap{min-height: 520px}
-.draft-canvas{height: calc(100vh - 220px); min-height: 520px; background: #fff; border:1px solid rgba(31,42,68,0.14); border-radius: calc(var(--radius) + 8px); box-shadow: var(--shadow); overflow:hidden}
+.draft-stack{display:grid; gap:14px; margin-top:12px}
+.draft-canvas-wrap{width:100%}
+.draft-canvas{height: 520px; background: #fff; border:1px solid rgba(31,42,68,0.14); border-radius: calc(var(--radius) + 8px); box-shadow: var(--shadow); overflow:hidden}
 
+.cards.draft-cards{grid-template-columns: repeat(2, minmax(0,1fr));}
 @media (max-width: 980px){
-  .draft{grid-template-columns: 1fr}
-  .draft-panel{position:relative; top:auto}
-  .draft-canvas{height: 520px}
+  .draft-canvas{height: 420px}
+  .cards.draft-cards{grid-template-columns: 1fr;}
 }
 @media (max-width: 780px){
   .cards{grid-template-columns:1fr}
