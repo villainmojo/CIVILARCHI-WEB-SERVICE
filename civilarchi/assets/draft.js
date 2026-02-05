@@ -66,6 +66,7 @@ const els = {
   braceHint: () => document.getElementById('drBraceHint'),
 
   copy: () => document.getElementById('drCopy'),
+  viewHome: () => document.getElementById('drViewHome'),
 
   qtyRows: () => document.getElementById('drQtyRows'),
   qtySumCount: () => document.getElementById('drQtySumCount'),
@@ -303,6 +304,13 @@ function ensureThree() {
 
   state.controls = new OrbitControls(state.camera, state.renderer.domElement);
   state.controls.enableDamping = true;
+  state.controls.enablePan = true;
+  // Middle mouse drag = pan
+  state.controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: THREE.MOUSE.ROTATE,
+  };
   state.controls.addEventListener('change', ()=>{ state.__userMoved = true; });
 
   state.raycaster = new THREE.Raycaster();
@@ -333,11 +341,15 @@ function ensureThree() {
     setFaceHover(hit);
   });
 
+  function baseMatFor(mesh){
+    const role = mesh?.userData?.role || 'default';
+    return state.roleMats?.[role] || state.roleMats?.default;
+  }
   function syncSelectionMaterials(){
     for(const mesh of state.memberGroup.children){
       const id = mesh?.userData?.id;
       if(!id) continue;
-      mesh.material = state.selectedIds.has(id) ? state.matSelected : state.matGray;
+      mesh.material = state.selectedIds.has(id) ? state.matSelected : baseMatFor(mesh);
     }
   }
 
@@ -827,9 +839,18 @@ function rebuild() {
     return mergeGeometries([top, bot, web], false);
   }
 
-  // materials (gray + selected)
-  if(!state.matGray) state.matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
+  // materials (by role + selected)
   if(!state.matSelected) state.matSelected = new THREE.MeshStandardMaterial({ color: 0x3A6EA5, roughness: 0.75, metalness: 0.10, emissive: 0x0b2a4a, emissiveIntensity: 0.25 });
+  if(!state.roleMats){
+    state.roleMats = {
+      col: new THREE.MeshStandardMaterial({ color: 0x4B5563, roughness: 0.9, metalness: 0.06 }),
+      beam: new THREE.MeshStandardMaterial({ color: 0x6B7280, roughness: 0.88, metalness: 0.06 }),
+      sub: new THREE.MeshStandardMaterial({ color: 0x8B5CF6, roughness: 0.85, metalness: 0.08 }),
+      joist: new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.8, metalness: 0.08 }),
+      brace: new THREE.MeshStandardMaterial({ color: 0x10B981, roughness: 0.82, metalness: 0.08 }),
+      default: new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 }),
+    };
+  }
   const matFace = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.0, depthWrite: false });
   // Only show faces in brace mode
   if(state.bracePlaneGroup) state.bracePlaneGroup.visible = !!state.braceMode;
@@ -870,7 +891,7 @@ function rebuild() {
             : (tdim && prof.shapeKey==='T')
               ? makeTGeomForColumn(h || 0.001, tdim)
               : new THREE.BoxGeometry(b, h || 0.001, dd);
-      const mesh = new THREE.Mesh(geom, state.matGray);
+      const mesh = new THREE.Mesh(geom, state.roleMats.col);
       mesh.userData = { id, role: 'col', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
       mesh.position.copy(toV(x, y, d.heightMm / 2));
       state.memberGroup.add(mesh);
@@ -990,7 +1011,7 @@ function rebuild() {
               : (tdim && prof.shapeKey==='T')
                 ? makeTGeomForBeamX(len || 0.001, tdim)
                 : new THREE.BoxGeometry(len || 0.001, dd, b);
-        const mesh = new THREE.Mesh(geom, state.matGray);
+        const mesh = new THREE.Mesh(geom, state.roleMats.beam);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const y = d.yPosMm[iy] || 0;
         // Place beam TOP at level elevation
@@ -1022,7 +1043,7 @@ function rebuild() {
               : (tdim && prof.shapeKey==='T')
                 ? makeTGeomForBeamY(len || 0.001, tdim)
                 : new THREE.BoxGeometry(b, dd, len || 0.001);
-        const mesh = new THREE.Mesh(geom, state.matGray);
+        const mesh = new THREE.Mesh(geom, state.roleMats.beam);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const x = d.xPosMm[ix] || 0;
         // Place beam TOP at level elevation
@@ -1059,7 +1080,7 @@ function rebuild() {
               const geom = (dim && prof.shapeKey==='H')
                 ? makeHGeomForBeamX(len || 0.001, dim)
                 : new THREE.BoxGeometry(len || 0.001, dd, b);
-              const mesh = new THREE.Mesh(geom, state.matGray);
+              const mesh = new THREE.Mesh(geom, state.roleMats.sub);
               mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
               mesh.position.copy(toV((x0+x1)/2, y, z - (dim?.H ?? 200)/2));
               state.memberGroup.add(mesh);
@@ -1080,7 +1101,7 @@ function rebuild() {
               const geom = (dim && prof.shapeKey==='H')
                 ? makeHGeomForBeamY(len || 0.001, dim)
                 : new THREE.BoxGeometry(b, dd, len || 0.001);
-              const mesh = new THREE.Mesh(geom, state.matGray);
+              const mesh = new THREE.Mesh(geom, state.roleMats.sub);
               mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
               mesh.position.copy(toV(x, (y0+y1)/2, z - (dim?.H ?? 200)/2));
               state.memberGroup.add(mesh);
@@ -1117,7 +1138,7 @@ function rebuild() {
             const geom = (cdim && profJ.shapeKey==='C')
               ? makeCGeomForBeamY(len || 0.001, cdim)
               : new THREE.BoxGeometry(mmToM(65), mmToM(125), len || 0.001);
-            const mesh = new THREE.Mesh(geom, state.matGray);
+            const mesh = new THREE.Mesh(geom, state.roleMats.joist);
             mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
             // center in Y (grid) direction
             mesh.position.copy(toV(xmm, sizeYmm/2, z - (cdim?.H ?? 125)/2));
@@ -1135,7 +1156,7 @@ function rebuild() {
             const geom = (cdim && profJ.shapeKey==='C')
               ? makeCGeomForBeamX(len || 0.001, cdim)
               : new THREE.BoxGeometry(len || 0.001, mmToM(125), mmToM(65));
-            const mesh = new THREE.Mesh(geom, state.matGray);
+            const mesh = new THREE.Mesh(geom, state.roleMats.joist);
             mesh.userData = { id, role: 'joist', stdKey: profJ.stdKey, shapeKey: profJ.shapeKey, sizeKey: profJ.sizeKey };
             mesh.position.copy(toV(sizeXmm/2, ymm, z - (cdim?.H ?? 125)/2));
             state.memberGroup.add(mesh);
@@ -1146,7 +1167,7 @@ function rebuild() {
   }
 
   // braces render
-  const braceMat = new THREE.MeshStandardMaterial({ color: 0x666a73, roughness: 0.78, metalness: 0.08 });
+  const braceMat = state.roleMats.brace;
   function braceGeomAlongX(len, prof){
     const hdim = (prof.shapeKey==='H') ? parseH(prof.name) : null;
     const cdim = (prof.shapeKey==='C') ? parseC(prof.name) : null;
@@ -1571,6 +1592,13 @@ function wire() {
     } catch (e) {
       window.dispatchEvent(new CustomEvent('civilarchi:toast', { detail: '복사 실패(브라우저 권한).' }));
     }
+  });
+
+  // View home
+  els.viewHome()?.addEventListener('click', ()=>{
+    state.__userMoved = false;
+    rebuild();
+    state.__userMoved = true;
   });
 }
 

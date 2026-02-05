@@ -226,6 +226,33 @@ label.inline input{width:auto}
 .draft-canvas-wrap{width:100%; position:relative}
 .draft-canvas{height: 480px; background: #fff; border:1px solid rgba(31,42,68,0.14); border-radius: calc(var(--radius) + 8px); box-shadow: var(--shadow); overflow:hidden}
 
+.draft-canvas-ui{position:absolute; top:12px; left:12px; z-index: 60}
+.home-fab{width:44px; height:44px}
+
+.draft-legend{
+  position:absolute;
+  left:12px;
+  bottom:12px;
+  z-index: 60;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(31,42,68,0.14);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  font-size: 12px;
+  color: rgba(31,42,68,0.85);
+}
+.lg{display:inline-flex; gap:6px; align-items:center; font-weight:800}
+.sw{width:10px; height:10px; border-radius: 4px; display:inline-block; border:1px solid rgba(0,0,0,0.15)}
+.sw.col{background:#4B5563}
+.sw.beam{background:#6B7280}
+.sw.sub{background:#8B5CF6}
+.sw.joist{background:#F59E0B}
+.sw.brace{background:#10B981}
+
 /* removed top checkboxes (draft-topopts) */
 
 .draft-subjoist{

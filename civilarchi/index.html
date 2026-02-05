@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0504" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0509" />
 </head>
 <body>
   <header class="top">
@@ -239,6 +239,18 @@
             <section class="draft-canvas-wrap">
               <div class="draft-canvas" id="drCanvas"></div>
 
+              <div class="draft-canvas-ui">
+                <button class="ov-fab home-fab" id="drViewHome" title="뷰 전체보기">⌂</button>
+              </div>
+
+              <div class="draft-legend" id="drLegend" aria-label="부재별 색상표">
+                <div class="lg"><span class="sw col"></span><span>기둥</span></div>
+                <div class="lg"><span class="sw beam"></span><span>보</span></div>
+                <div class="lg"><span class="sw sub"></span><span>Sub</span></div>
+                <div class="lg"><span class="sw joist"></span><span>Joist</span></div>
+                <div class="lg"><span class="sw brace"></span><span>Brace</span></div>
+              </div>
+
               <div class="draft-ov collapsed" aria-label="선택 부재 변경" id="drOvPanel">
                 <div class="ov-fabs">
                   <button class="ov-fab" id="drBraceToggle" title="브레이스 모드">B</button>
@@ -433,7 +445,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0504"></script>
-  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0504"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0509"></script>
+  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0509"></script>
 </body>
 </html>
