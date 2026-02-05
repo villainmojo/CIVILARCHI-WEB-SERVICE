@@ -11,3 +11,4 @@ Columns:
 
 ---
 
+- 2026-02-05T02:02:31Z | f6960ba | deploy-20260205T020231Z | /root/clawd-dev/backups/civilarchi/deploy-20260205T020231Z_f6960ba.tgz
