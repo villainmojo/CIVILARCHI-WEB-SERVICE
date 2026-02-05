@@ -416,14 +416,15 @@ function renderQty(d) {
     }
   }
 
-  // Sub beams
-  if(d.subEnabled && d.subCountPerBay > 0){
-    const avgX = (d.spansX.reduce((a,b)=>a+b,0) / Math.max(1, d.spansX.length));
-    const avgY = (d.spansY.reduce((a,b)=>a+b,0) / Math.max(1, d.spansY.length));
-    const runAlongX = avgX <= avgY;
+  // Sub beams + Joists need consistent direction
+  const avgX = (d.spansX.reduce((a,b)=>a+b,0) / Math.max(1, d.spansX.length));
+  const avgY = (d.spansY.reduce((a,b)=>a+b,0) / Math.max(1, d.spansY.length));
+  const subAlongX = avgX <= avgY;
 
+  // Sub beams (between main beams only => within each bay)
+  if(d.subEnabled && d.subCountPerBay > 0){
     for(const z of d.levelsMm){
-      if(runAlongX){
+      if(subAlongX){
         // between Y gridlines, place sub beams along X
         for(let bayY=0; bayY<d.ny-1; bayY++){
           const y0 = d.yPosMm[bayY] || 0;
@@ -457,7 +458,7 @@ function renderQty(d) {
     }
   }
 
-  // Joists (fixed: C 125x65x6x8, X-dir, 700 spacing)
+  // Joists (between beam/subbeam lines only, 90deg to sub beam, 700 spacing)
   if(d.joistEnabled){
     const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
     const stdKey = d.profileBeam.stdKey || 'KS';
@@ -465,15 +466,30 @@ function renderQty(d) {
     const c125 = cItems.find(it => /C\s*125x65x6x8/i.test(it.name)) || cItems[0] || null;
     const profJ = c125 ? { stdKey, shapeKey: 'C', sizeKey: c125.key, name: c125.name, kgm: c125.kgm ?? null } : { stdKey, shapeKey: 'C', sizeKey: 'C125', name: 'C 125x65x6x8', kgm: null };
 
-    const sizeY = d.yPosMm[d.yPosMm.length-1] || 0;
     const step = 700;
+    const sizeXmm = d.xPosMm[d.xPosMm.length-1] || 0;
+    const sizeYmm = d.yPosMm[d.yPosMm.length-1] || 0;
+
     for(const z of d.levelsMm){
-      for(let y=step; y < sizeY; y+=step){
-        for(let ix=0; ix<d.nx-1; ix++){
-          const x0 = d.xPosMm[ix] || 0;
-          const x1 = d.xPosMm[ix+1] || 0;
-          const lenM = mmToM(x1-x0);
-          add('Joist', profJ, lenM);
+      if(subAlongX){
+        // Joist along Y, spaced in X, within each X bay
+        for(let bayX=0; bayX<d.nx-1; bayX++){
+          const x0 = d.xPosMm[bayX] || 0;
+          const x1 = d.xPosMm[bayX+1] || 0;
+          for(let x=x0+step; x < x1; x+=step){
+            const lenM = mmToM(sizeYmm);
+            add('Joist', profJ, lenM);
+          }
+        }
+      } else {
+        // Joist along X, spaced in Y, within each Y bay
+        for(let bayY=0; bayY<d.ny-1; bayY++){
+          const y0 = d.yPosMm[bayY] || 0;
+          const y1 = d.yPosMm[bayY+1] || 0;
+          for(let y=y0+step; y < y1; y+=step){
+            const lenM = mmToM(sizeXmm);
+            add('Joist', profJ, lenM);
+          }
         }
       }
     }
@@ -547,6 +563,50 @@ function rebuild() {
     return { H: parseFloat(m[1]), B: parseFloat(m[2]), tf: parseFloat(m[3]), tw: parseFloat(m[4]) };
   }
 
+  function parseC(name){
+    // Name like: "C 125x65x6x8"
+    const m = String(name||'').match(/C\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
+    if(!m) return null;
+    return { H: parseFloat(m[1]), B: parseFloat(m[2]), tw: parseFloat(m[3]), tf: parseFloat(m[4]) };
+  }
+
+  function makeCGeomForBeamX(lenM, dimMm){
+    const B = mmToM(dimMm.B);
+    const H = mmToM(dimMm.H);
+    const tf = mmToM(dimMm.tf);
+    const tw = mmToM(dimMm.tw);
+
+    // C open side toward +Z (rough)
+    const web = new THREE.BoxGeometry(lenM, Math.max(0.001, H - 2*tf), tw);
+    web.translate(0, 0, -B/2 + tw/2);
+    const top = new THREE.BoxGeometry(lenM, tf, B);
+    top.translate(0, H/2 - tf/2, 0);
+    const bot = new THREE.BoxGeometry(lenM, tf, B);
+    bot.translate(0, -H/2 + tf/2, 0);
+    return mergeGeometries([web, top, bot], false);
+  }
+
+  function makeCGeomForBeamY(lenM, dimMm){
+    const g = makeCGeomForBeamX(lenM, dimMm);
+    g.rotateY(Math.PI/2);
+    return g;
+  }
+
+  function makeCGeomForColumn(heightM, dimMm){
+    const B = mmToM(dimMm.B);
+    const H = mmToM(dimMm.H);
+    const tf = mmToM(dimMm.tf);
+    const tw = mmToM(dimMm.tw);
+
+    const web = new THREE.BoxGeometry(tw, heightM, Math.max(0.001, H - 2*tf));
+    web.translate(0, 0, -B/2 + tw/2);
+    const top = new THREE.BoxGeometry(B, heightM, tf);
+    top.translate(0, 0, H/2 - tf/2);
+    const bot = new THREE.BoxGeometry(B, heightM, tf);
+    bot.translate(0, 0, -H/2 + tf/2);
+    return mergeGeometries([web, top, bot], false);
+  }
+
   function makeHGeomForBeamX(lenM, dimMm){
     const B = mmToM(dimMm.B);
     const H = mmToM(dimMm.H);
@@ -615,9 +675,12 @@ function rebuild() {
       const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
       const b = mmToM(dim?.B ?? (colHdim?.B ?? 200));
       const dd = mmToM(dim?.H ?? (colHdim?.H ?? 200));
+      const cdim = (prof.shapeKey === 'C') ? parseC(prof.name) : null;
       const geom = (dim && prof.shapeKey==='H')
         ? makeHGeomForColumn(h || 0.001, dim)
-        : new THREE.BoxGeometry(b, h || 0.001, dd);
+        : (cdim && prof.shapeKey==='C')
+          ? makeCGeomForColumn(h || 0.001, cdim)
+          : new THREE.BoxGeometry(b, h || 0.001, dd);
       const mesh = new THREE.Mesh(geom, state.matGray);
       mesh.userData = { id, role: 'col', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
       mesh.position.copy(toV(x, y, d.heightMm / 2));
@@ -638,9 +701,12 @@ function rebuild() {
         const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
         const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
         const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
+        const cdim = (prof.shapeKey === 'C') ? parseC(prof.name) : null;
         const geom = (dim && prof.shapeKey==='H')
           ? makeHGeomForBeamX(len || 0.001, dim)
-          : new THREE.BoxGeometry(len || 0.001, dd, b);
+          : (cdim && prof.shapeKey==='C')
+            ? makeCGeomForBeamX(len || 0.001, cdim)
+            : new THREE.BoxGeometry(len || 0.001, dd, b);
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const y = d.yPosMm[iy] || 0;
@@ -661,9 +727,12 @@ function rebuild() {
         const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
         const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
         const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
+        const cdim = (prof.shapeKey === 'C') ? parseC(prof.name) : null;
         const geom = (dim && prof.shapeKey==='H')
           ? makeHGeomForBeamY(len || 0.001, dim)
-          : new THREE.BoxGeometry(b, dd, len || 0.001);
+          : (cdim && prof.shapeKey==='C')
+            ? makeCGeomForBeamY(len || 0.001, cdim)
+            : new THREE.BoxGeometry(b, dd, len || 0.001);
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const x = d.xPosMm[ix] || 0;
