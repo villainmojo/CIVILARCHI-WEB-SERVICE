@@ -239,6 +239,7 @@ body[data-view="draft"] .sum-table th, body[data-view="draft"] .sum-table td{pad
 .fold > summary::-webkit-details-marker{display:none}
 .fold > summary::after{content:'▾'; float:right; color: rgba(31,42,68,0.55)}
 .fold[open] > summary::after{content:'▴'}
+.fold[open]{background: rgba(255,255,255,0.85)}
 
 /* two column inside profile card */
 .two{display:grid; grid-template-columns: 1fr 1fr; gap:12px}

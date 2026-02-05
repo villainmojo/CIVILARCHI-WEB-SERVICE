@@ -4,6 +4,14 @@ import { OrbitControls } from 'https://esm.sh/three@0.160.0/examples/jsm/control
 // STEEL STRUCTURE DRAFT (MVP)
 // Units: inputs are mm. Internals use meters for Three.js.
 
+// Guard: prevent double-execution if the module is accidentally injected twice
+if(window.__civilarchiDraftBooted){
+  // eslint-disable-next-line no-console
+  console.warn('civilarchi draft: already booted');
+} else {
+  window.__civilarchiDraftBooted = true;
+}
+
 // Debug hook: lets app.js detect module executed
 window.__civilarchiDraftModuleExecuted = (window.__civilarchiDraftModuleExecuted || 0) + 1;
 
@@ -60,7 +68,17 @@ const state = {
   gridGroup: null,
   memberGroup: null,
   raf: 0,
+
+  raycaster: null,
+  pointer: null,
+  selectedId: null,
+  selectedMesh: null,
+  matGray: null,
+  matSelected: null,
 };
+
+/** @type {Record<string, {shapeKey:string, sizeKey:string}>} */
+const overrides = {};
 
 function clearGroup(g) {
   if (!g) return;
@@ -226,6 +244,38 @@ function ensureThree() {
   state.controls = new OrbitControls(state.camera, state.renderer.domElement);
   state.controls.enableDamping = true;
 
+  state.raycaster = new THREE.Raycaster();
+  state.pointer = new THREE.Vector2();
+
+  // Selection
+  state.renderer.domElement.addEventListener('pointerdown', (ev)=>{
+    const rect = state.renderer.domElement.getBoundingClientRect();
+    const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+    state.pointer.set(x,y);
+    state.raycaster.setFromCamera(state.pointer, state.camera);
+
+    const hits = state.raycaster.intersectObjects(state.memberGroup.children, false);
+    const hit = hits[0]?.object || null;
+
+    // reset previous highlight
+    if(state.selectedMesh){
+      state.selectedMesh.material = state.matGray;
+      state.selectedMesh = null;
+      state.selectedId = null;
+    }
+
+    if(hit && hit.userData?.id){
+      state.selectedMesh = hit;
+      state.selectedId = hit.userData.id;
+      hit.material = state.matSelected;
+      // notify UI
+      window.dispatchEvent(new CustomEvent('civilarchi:draft:selected', { detail: hit.userData }));
+    } else {
+      window.dispatchEvent(new CustomEvent('civilarchi:draft:selected', { detail: null }));
+    }
+  });
+
   state.root = new THREE.Group();
   state.scene.add(state.root);
 
@@ -341,11 +391,24 @@ function rebuild() {
     return { H: parseFloat(m[1]), B: parseFloat(m[2]), tf: parseFloat(m[3]), tw: parseFloat(m[4]) };
   }
 
-  // members (placeholder but profile-sized)
-  const matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
+  // materials (gray + selected)
+  if(!state.matGray) state.matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
+  if(!state.matSelected) state.matSelected = new THREE.MeshStandardMaterial({ color: 0x3A6EA5, roughness: 0.75, metalness: 0.10, emissive: 0x0b2a4a, emissiveIntensity: 0.25 });
 
-  const colHdim = (d.profileCol.shapeKey === 'H') ? parseH(d.profileCol.name) : null;
-  const beamHdim = (d.profileBeam.shapeKey === 'H') ? parseH(d.profileBeam.name) : null;
+  function effectiveProfile(role, memberId){
+    const base = role==='col' ? d.profileCol : d.profileBeam;
+    const ov = memberId ? overrides[memberId] : null;
+    if(!ov) return base;
+    const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+    const item = data?.[base.stdKey]?.shapes?.[ov.shapeKey]?.items?.find(it => it.key === ov.sizeKey) || null;
+    return { ...base, shapeKey: ov.shapeKey, sizeKey: ov.sizeKey, name: item?.name ?? ov.sizeKey, kgm: item?.kgm ?? null };
+  }
+
+  const colBase = effectiveProfile('col');
+  const beamBase = effectiveProfile('beam');
+
+  const colHdim = (colBase.shapeKey === 'H') ? parseH(colBase.name) : null;
+  const beamHdim = (beamBase.shapeKey === 'H') ? parseH(beamBase.name) : null;
 
   const colB = mmToM(colHdim?.B ?? 200);
   const colD = mmToM(colHdim?.H ?? 200);
@@ -360,7 +423,14 @@ function rebuild() {
     for (let iy = 0; iy < d.ny; iy++) {
       const x = d.xPosMm[ix] || 0;
       const y = d.yPosMm[iy] || 0;
-      const mesh = new THREE.Mesh(colGeom, matGray);
+      const id = `C_${ix}_${iy}`;
+      const prof = effectiveProfile('col', id);
+      const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
+      const b = mmToM(dim?.B ?? (colHdim?.B ?? 200));
+      const dd = mmToM(dim?.H ?? (colHdim?.H ?? 200));
+      const geom = new THREE.BoxGeometry(b, h || 0.001, dd);
+      const mesh = new THREE.Mesh(geom, state.matGray);
+      mesh.userData = { id, role: 'col', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
       mesh.position.copy(toV(x, y, d.heightMm / 2));
       state.memberGroup.add(mesh);
     }
@@ -374,8 +444,14 @@ function rebuild() {
         const x0 = d.xPosMm[ix] || 0;
         const x1 = d.xPosMm[ix+1] || 0;
         const len = mmToM(x1 - x0);
-        const geom = new THREE.BoxGeometry(len || 0.001, beamD, beamB);
-        const mesh = new THREE.Mesh(geom, matGray);
+        const id = `BX_${z}_${iy}_${ix}`;
+        const prof = effectiveProfile('beam', id);
+        const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
+        const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
+        const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
+        const geom = new THREE.BoxGeometry(len || 0.001, dd, b);
+        const mesh = new THREE.Mesh(geom, state.matGray);
+        mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const y = d.yPosMm[iy] || 0;
         mesh.position.copy(toV((x0 + x1) / 2, y, z));
         state.memberGroup.add(mesh);
@@ -388,8 +464,14 @@ function rebuild() {
         const y0 = d.yPosMm[iy] || 0;
         const y1 = d.yPosMm[iy+1] || 0;
         const len = mmToM(y1 - y0);
-        const geom = new THREE.BoxGeometry(beamB, beamD, len || 0.001);
-        const mesh = new THREE.Mesh(geom, matGray);
+        const id = `BY_${z}_${ix}_${iy}`;
+        const prof = effectiveProfile('beam', id);
+        const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
+        const b = mmToM(dim?.B ?? (beamHdim?.B ?? 180));
+        const dd = mmToM(dim?.H ?? (beamHdim?.H ?? 220));
+        const geom = new THREE.BoxGeometry(b, dd, len || 0.001);
+        const mesh = new THREE.Mesh(geom, state.matGray);
+        mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const x = d.xPosMm[ix] || 0;
         mesh.position.copy(toV(x, (y0 + y1) / 2, z));
         state.memberGroup.add(mesh);
@@ -495,9 +577,98 @@ function fillProfileSelectors(){
   beamSize.addEventListener('change', rebuild);
 }
 
+function initSelectionUI(){
+  const info = document.getElementById('drSelInfo');
+  const selShape = document.getElementById('drSelShape');
+  const selSize = document.getElementById('drSelSize');
+  const btnApply = document.getElementById('drSelApply');
+  const btnClear = document.getElementById('drSelClear');
+
+  const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+
+  function disableAll(){
+    selShape.disabled = true;
+    selSize.disabled = true;
+    btnApply.disabled = true;
+    btnClear.disabled = true;
+  }
+
+  function enableAll(){
+    selShape.disabled = false;
+    selSize.disabled = false;
+    btnApply.disabled = false;
+    btnClear.disabled = false;
+  }
+
+  function fillFrom(userData){
+    if(!userData){
+      info.textContent = '3D에서 부재를 클릭하면 여기서 해당 부재만 프로파일을 변경할 수 있습니다.';
+      disableAll();
+      selShape.innerHTML='';
+      selSize.innerHTML='';
+      return;
+    }
+
+    const stdKey = els.stdAll()?.value || userData.stdKey || 'KS';
+    const shapes = data?.[stdKey]?.shapes || {};
+    const shapeKeys = Object.keys(shapes);
+
+    selShape.innerHTML='';
+    shapeKeys.forEach(sk=>{
+      const opt=document.createElement('option');
+      opt.value=sk; opt.textContent=sk;
+      selShape.appendChild(opt);
+    });
+
+    const currentOv = overrides[userData.id];
+    selShape.value = currentOv?.shapeKey || userData.shapeKey || (shapeKeys.includes('H')?'H':(shapeKeys[0]||''));
+
+    function fillSizes(){
+      const items = shapes?.[selShape.value]?.items || [];
+      selSize.innerHTML='';
+      items.forEach(it=>{
+        const opt=document.createElement('option');
+        opt.value=it.key;
+        opt.textContent = `${it.name}${(it.kgm!=null && Number.isFinite(it.kgm)) ? ` · ${it.kgm} kg/m` : ''}`;
+        selSize.appendChild(opt);
+      });
+      selSize.value = currentOv?.sizeKey || userData.sizeKey || (items[0]?.key || '');
+    }
+
+    fillSizes();
+    enableAll();
+
+    info.textContent = `선택됨: ${userData.role.toUpperCase()} · ${userData.id}`;
+
+    selShape.onchange = ()=>{ fillSizes(); };
+
+    btnApply.onclick = ()=>{
+      overrides[userData.id] = { shapeKey: selShape.value, sizeKey: selSize.value };
+      rebuild();
+    };
+
+    btnClear.onclick = ()=>{
+      delete overrides[userData.id];
+      rebuild();
+    };
+  }
+
+  window.addEventListener('civilarchi:draft:selected', (e)=>{
+    fillFrom(e.detail);
+  });
+
+  // initial state
+  fillFrom(null);
+}
+
 function wire() {
+  // Avoid double-wiring if module loaded twice
+  if(window.__civilarchiDraftWired) return;
+  window.__civilarchiDraftWired = true;
+
   initLevels();
   fillProfileSelectors();
+  initSelectionUI();
 
   [els.gridX(), els.gridY(), els.spacingX(), els.spacingY(), els.spansX(), els.spansY()].forEach((el) => {
     el?.addEventListener('input', rebuild);

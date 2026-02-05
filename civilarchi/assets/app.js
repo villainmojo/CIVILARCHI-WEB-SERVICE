@@ -408,7 +408,7 @@
     if(window.__civilarchiDraftLoaded) return;
     // Some clients may have cached HTML that referenced an older draft script.
     // Dynamically load the latest module as a fallback.
-    const existing = document.querySelector('script[data-civilarchi-draft]');
+    const existing = document.querySelector('script[data-civilarchi-draft], script[type="module"][src*="/civilarchi/assets/draft.js"]');
     if(existing) return;
     const s = document.createElement('script');
     s.type = 'module';
