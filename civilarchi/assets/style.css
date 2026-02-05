@@ -223,8 +223,22 @@ label.inline input{width:auto}
 
 /* Draft */
 .draft-stack{display:grid; gap:10px; margin-top:10px}
-.draft-canvas-wrap{width:100%}
+.draft-canvas-wrap{width:100%; position:relative}
 .draft-canvas{height: 480px; background: #fff; border:1px solid rgba(31,42,68,0.14); border-radius: calc(var(--radius) + 8px); box-shadow: var(--shadow); overflow:hidden}
+
+.draft-ov{
+  position:absolute;
+  top:12px; right:12px;
+  width: 320px;
+  max-width: calc(100% - 24px);
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(31,42,68,0.14);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(16,24,40,0.12);
+  padding: 10px;
+}
+.ov-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px}
+.ov-title{font-weight:900; color: var(--navy)}
 
 /* compact draft UI */
 body[data-view="draft"] .card{padding:10px}

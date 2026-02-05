@@ -80,6 +80,14 @@ const state = {
 /** @type {Record<string, {shapeKey:string, sizeKey:string}>} */
 const overrides = {};
 
+function effectiveProfile(base, memberId){
+  const ov = memberId ? overrides[memberId] : null;
+  if(!ov) return base;
+  const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
+  const item = data?.[base.stdKey]?.shapes?.[ov.shapeKey]?.items?.find(it => it.key === ov.sizeKey) || null;
+  return { ...base, shapeKey: ov.shapeKey, sizeKey: ov.sizeKey, name: item?.name ?? ov.sizeKey, kgm: item?.kgm ?? null };
+}
+
 function clearGroup(g) {
   if (!g) return;
   while (g.children.length) {
@@ -320,11 +328,46 @@ function renderQty(d) {
   const colLenM = mmToM(d.colLenMm);
   const beamLenM = mmToM(d.beamLenMm);
 
-  const kgmCol = (d.profileCol && Number.isFinite(d.profileCol.kgm)) ? d.profileCol.kgm : null;
-  const kgmBeam = (d.profileBeam && Number.isFinite(d.profileBeam.kgm)) ? d.profileBeam.kgm : null;
+  // Per-member load sum (overrides reflected)
+  let colLoadKgSum = 0;
+  let beamLoadKgSum = 0;
 
-  const colLoadKg = (kgmCol != null) ? (colLenM * kgmCol) : null;
-  const beamLoadKg = (kgmBeam != null) ? (beamLenM * kgmBeam) : null;
+  // columns: each id C_ix_iy, length = heightMm
+  const colLenEachM = mmToM(d.heightMm);
+  for(let ix=0; ix<d.nx; ix++){
+    for(let iy=0; iy<d.ny; iy++){
+      const id = `C_${ix}_${iy}`;
+      const prof = effectiveProfile(d.profileCol, id);
+      if(Number.isFinite(prof.kgm)) colLoadKgSum += prof.kgm * colLenEachM;
+    }
+  }
+
+  // beams: X beams BY/BX ids, length per span varies
+  for(const z of d.levelsMm){
+    for(let iy=0; iy<d.ny; iy++){
+      for(let ix=0; ix<d.nx-1; ix++){
+        const x0 = d.xPosMm[ix] || 0;
+        const x1 = d.xPosMm[ix+1] || 0;
+        const lenM = mmToM(x1-x0);
+        const id = `BX_${z}_${iy}_${ix}`;
+        const prof = effectiveProfile(d.profileBeam, id);
+        if(Number.isFinite(prof.kgm)) beamLoadKgSum += prof.kgm * lenM;
+      }
+    }
+    for(let ix=0; ix<d.nx; ix++){
+      for(let iy=0; iy<d.ny-1; iy++){
+        const y0 = d.yPosMm[iy] || 0;
+        const y1 = d.yPosMm[iy+1] || 0;
+        const lenM = mmToM(y1-y0);
+        const id = `BY_${z}_${ix}_${iy}`;
+        const prof = effectiveProfile(d.profileBeam, id);
+        if(Number.isFinite(prof.kgm)) beamLoadKgSum += prof.kgm * lenM;
+      }
+    }
+  }
+
+  const colLoadKg = colLoadKgSum > 0 ? colLoadKgSum : null;
+  const beamLoadKg = beamLoadKgSum > 0 ? beamLoadKgSum : null;
 
   const rows = [
     { cat: '기둥', member: d.profileCol.name || d.profileCol.sizeKey || 'COLUMN', len: colLenM, count: d.colCount, loadKg: colLoadKg },
@@ -395,17 +438,8 @@ function rebuild() {
   if(!state.matGray) state.matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
   if(!state.matSelected) state.matSelected = new THREE.MeshStandardMaterial({ color: 0x3A6EA5, roughness: 0.75, metalness: 0.10, emissive: 0x0b2a4a, emissiveIntensity: 0.25 });
 
-  function effectiveProfile(role, memberId){
-    const base = role==='col' ? d.profileCol : d.profileBeam;
-    const ov = memberId ? overrides[memberId] : null;
-    if(!ov) return base;
-    const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
-    const item = data?.[base.stdKey]?.shapes?.[ov.shapeKey]?.items?.find(it => it.key === ov.sizeKey) || null;
-    return { ...base, shapeKey: ov.shapeKey, sizeKey: ov.sizeKey, name: item?.name ?? ov.sizeKey, kgm: item?.kgm ?? null };
-  }
-
-  const colBase = effectiveProfile('col');
-  const beamBase = effectiveProfile('beam');
+  const colBase = effectiveProfile(d.profileCol, null);
+  const beamBase = effectiveProfile(d.profileBeam, null);
 
   const colHdim = (colBase.shapeKey === 'H') ? parseH(colBase.name) : null;
   const beamHdim = (beamBase.shapeKey === 'H') ? parseH(beamBase.name) : null;
@@ -578,11 +612,12 @@ function fillProfileSelectors(){
 }
 
 function initSelectionUI(){
-  const info = document.getElementById('drSelInfo');
-  const selShape = document.getElementById('drSelShape');
-  const selSize = document.getElementById('drSelSize');
-  const btnApply = document.getElementById('drSelApply');
-  const btnClear = document.getElementById('drSelClear');
+  const info = document.getElementById('drOvInfo');
+  const selShape = document.getElementById('drOvShape');
+  const selSize = document.getElementById('drOvSize');
+  const btnApply = document.getElementById('drOvApply');
+  const btnClear = document.getElementById('drOvClear');
+  const btnResetAll = document.getElementById('drOvResetAll');
 
   const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
 
@@ -606,6 +641,7 @@ function initSelectionUI(){
       disableAll();
       selShape.innerHTML='';
       selSize.innerHTML='';
+      btnResetAll && (btnResetAll.disabled = Object.keys(overrides).length === 0);
       return;
     }
 
@@ -644,11 +680,13 @@ function initSelectionUI(){
 
     btnApply.onclick = ()=>{
       overrides[userData.id] = { shapeKey: selShape.value, sizeKey: selSize.value };
+      if(btnResetAll) btnResetAll.disabled = Object.keys(overrides).length === 0;
       rebuild();
     };
 
     btnClear.onclick = ()=>{
       delete overrides[userData.id];
+      if(btnResetAll) btnResetAll.disabled = Object.keys(overrides).length === 0;
       rebuild();
     };
   }
@@ -657,7 +695,15 @@ function initSelectionUI(){
     fillFrom(e.detail);
   });
 
+  btnResetAll && (btnResetAll.onclick = ()=>{
+    for(const k of Object.keys(overrides)) delete overrides[k];
+    if(btnResetAll) btnResetAll.disabled = true;
+    fillFrom(state.selectedMesh?.userData || null);
+    rebuild();
+  });
+
   // initial state
+  if(btnResetAll) btnResetAll.disabled = true;
   fillFrom(null);
 }
 

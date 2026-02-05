@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0322" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0328" />
 </head>
 <body>
   <header class="top">
@@ -236,6 +236,23 @@
           <div class="draft-stack">
             <section class="draft-canvas-wrap">
               <div class="draft-canvas" id="drCanvas"></div>
+
+              <div class="draft-ov" aria-label="선택 부재 변경">
+                <div class="ov-head">
+                  <div class="ov-title">선택 부재</div>
+                  <button class="mini-btn" id="drOvResetAll" title="전체 Override 초기화">전체 초기화</button>
+                </div>
+                <div class="muted small" id="drOvInfo">3D에서 부재를 클릭하면 여기서 해당 부재만 프로파일을 변경할 수 있습니다.</div>
+
+                <div class="form" style="margin-top:8px">
+                  <label><span>부재종류</span><select id="drOvShape" disabled></select></label>
+                  <label><span>프로파일</span><select id="drOvSize" disabled></select></label>
+                </div>
+                <div class="btns" style="margin-top:10px">
+                  <button class="btn" id="drOvApply" disabled>선택 부재에 적용</button>
+                  <button class="btn" id="drOvClear" disabled>선택 부재 초기화</button>
+                </div>
+              </div>
             </section>
 
             <section class="draft-settings">
@@ -287,16 +304,7 @@
                     </div>
                   </div>
 
-                  <div class="sb-title" style="margin-top:12px">선택된 부재(Override)</div>
-                  <div class="form">
-                    <div class="hint" id="drSelInfo">3D에서 부재를 클릭하면 여기서 해당 부재만 프로파일을 변경할 수 있습니다.</div>
-                    <label><span>부재종류</span><select id="drSelShape" disabled></select></label>
-                    <label><span>프로파일</span><select id="drSelSize" disabled></select></label>
-                    <div class="btns">
-                      <button class="btn" id="drSelApply" disabled>선택 부재에 적용</button>
-                      <button class="btn" id="drSelClear" disabled>선택 부재 초기화</button>
-                    </div>
-                  </div>
+                  <!-- Override UI moved to 3D overlay -->
 
                   <div class="hint" style="margin-top:10px">기본값: KR·KS / H / H 150x150… · 선택 부재 Override는 해당 부재에만 적용됩니다.</div>
                 </details>
@@ -347,7 +355,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0322"></script>
-  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0322"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0328"></script>
+  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0328"></script>
 </body>
 </html>
