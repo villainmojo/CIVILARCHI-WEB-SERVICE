@@ -73,6 +73,7 @@ const state = {
   pointer: null,
   selectedId: null,
   selectedMesh: null,
+  selectedIds: new Set(),
   matGray: null,
   matSelected: null,
 };
@@ -255,7 +256,15 @@ function ensureThree() {
   state.raycaster = new THREE.Raycaster();
   state.pointer = new THREE.Vector2();
 
-  // Selection
+  function syncSelectionMaterials(){
+    for(const mesh of state.memberGroup.children){
+      const id = mesh?.userData?.id;
+      if(!id) continue;
+      mesh.material = state.selectedIds.has(id) ? state.matSelected : state.matGray;
+    }
+  }
+
+  // Selection (Shift: multi)
   state.renderer.domElement.addEventListener('pointerdown', (ev)=>{
     const rect = state.renderer.domElement.getBoundingClientRect();
     const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -266,21 +275,24 @@ function ensureThree() {
     const hits = state.raycaster.intersectObjects(state.memberGroup.children, false);
     const hit = hits[0]?.object || null;
 
-    // reset previous highlight
-    if(state.selectedMesh){
-      state.selectedMesh.material = state.matGray;
-      state.selectedMesh = null;
-      state.selectedId = null;
+    if(!ev.shiftKey){
+      state.selectedIds.clear();
     }
 
     if(hit && hit.userData?.id){
+      const id = hit.userData.id;
+      if(ev.shiftKey && state.selectedIds.has(id)) state.selectedIds.delete(id);
+      else state.selectedIds.add(id);
+
       state.selectedMesh = hit;
-      state.selectedId = hit.userData.id;
-      hit.material = state.matSelected;
-      // notify UI
-      window.dispatchEvent(new CustomEvent('civilarchi:draft:selected', { detail: hit.userData }));
+      state.selectedId = id;
+      syncSelectionMaterials();
+
+      // notify UI (send last selected + full set)
+      window.dispatchEvent(new CustomEvent('civilarchi:draft:selected', { detail: { last: hit.userData, ids: [...state.selectedIds] } }));
     } else {
-      window.dispatchEvent(new CustomEvent('civilarchi:draft:selected', { detail: null }));
+      syncSelectionMaterials();
+      window.dispatchEvent(new CustomEvent('civilarchi:draft:selected', { detail: { last: null, ids: [...state.selectedIds] } }));
     }
   });
 
@@ -374,15 +386,26 @@ function renderQty(d) {
     { cat: '보', member: d.profileBeam.name || d.profileBeam.sizeKey || 'BEAM', len: beamLenM, count: d.beamCount, loadKg: beamLoadKg },
   ];
 
+  // Split rows by member type if profiles differ
+  const grouped = new Map();
+  for(const r of rows){
+    const key = `${r.cat}|${r.member}`;
+    const cur = grouped.get(key) || { ...r, len:0, count:0, loadKg:0 };
+    cur.len += r.len;
+    cur.count += r.count;
+    cur.loadKg += (r.loadKg || 0);
+    grouped.set(key, cur);
+  }
+
   rowsEl.innerHTML = '';
-  for (const r of rows) {
+  for (const r of grouped.values()) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${r.cat}</td>
       <td class="mono">${r.member}</td>
       <td class="right mono">${fmt(r.len, 3)}</td>
       <td class="right mono">${fmt(r.count, 0)}</td>
-      <td class="right mono">${fmtLoadKgTon(r.loadKg)}</td>
+      <td class="right mono">${fmtLoadKgTon(r.loadKg || null)}</td>
     `;
     rowsEl.appendChild(tr);
   }
@@ -487,7 +510,8 @@ function rebuild() {
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const y = d.yPosMm[iy] || 0;
-        mesh.position.copy(toV((x0 + x1) / 2, y, z));
+        // Place beam TOP at level elevation
+        mesh.position.copy(toV((x0 + x1) / 2, y, z - (dim?.H ?? (beamHdim?.H ?? 220))/2));
         state.memberGroup.add(mesh);
       }
     }
@@ -507,7 +531,8 @@ function rebuild() {
         const mesh = new THREE.Mesh(geom, state.matGray);
         mesh.userData = { id, role: 'beam', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey };
         const x = d.xPosMm[ix] || 0;
-        mesh.position.copy(toV(x, (y0 + y1) / 2, z));
+        // Place beam TOP at level elevation
+        mesh.position.copy(toV(x, (y0 + y1) / 2, z - (dim?.H ?? (beamHdim?.H ?? 220))/2));
         state.memberGroup.add(mesh);
       }
     }
@@ -612,12 +637,26 @@ function fillProfileSelectors(){
 }
 
 function initSelectionUI(){
+  const panel = document.getElementById('drOvPanel');
+  const btnToggle = document.getElementById('drOvToggle');
+  const btnCollapse = document.getElementById('drOvCollapse');
+
   const info = document.getElementById('drOvInfo');
   const selShape = document.getElementById('drOvShape');
   const selSize = document.getElementById('drOvSize');
   const btnApply = document.getElementById('drOvApply');
   const btnClear = document.getElementById('drOvClear');
   const btnResetAll = document.getElementById('drOvResetAll');
+  const ovList = document.getElementById('drOvList');
+
+  function setCollapsed(on){
+    if(!panel) return;
+    panel.classList.toggle('collapsed', !!on);
+  }
+  btnToggle && (btnToggle.onclick = ()=> setCollapsed(!(panel && !panel.classList.contains('collapsed'))));
+  btnCollapse && (btnCollapse.onclick = ()=> setCollapsed(true));
+  // default collapsed
+  setCollapsed(true);
 
   const data = (window.CIVILARCHI_STEEL_DATA && window.CIVILARCHI_STEEL_DATA.standards) || {};
 
@@ -635,9 +674,47 @@ function initSelectionUI(){
     btnClear.disabled = false;
   }
 
-  function fillFrom(userData){
-    if(!userData){
-      info.textContent = '3D에서 부재를 클릭하면 여기서 해당 부재만 프로파일을 변경할 수 있습니다.';
+  function renderOverrideList(){
+    if(!ovList) return;
+    const entries = Object.entries(overrides);
+    ovList.innerHTML = '';
+    if(entries.length === 0){
+      const tr=document.createElement('tr');
+      tr.innerHTML = '<td colspan="5" class="muted">(override 없음)</td>';
+      ovList.appendChild(tr);
+      return;
+    }
+    for(const [id, ov] of entries){
+      const tr=document.createElement('tr');
+      tr.innerHTML = `
+        <td class="mono">${id}</td>
+        <td>${id.startsWith('C_') ? '기둥' : '보'}</td>
+        <td class="mono">${ov.shapeKey}</td>
+        <td class="mono">${ov.sizeKey}</td>
+        <td class="right"><button class="mini-btn" data-ov-del="${id}">삭제</button></td>
+      `;
+      ovList.appendChild(tr);
+    }
+  }
+
+  ovList?.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-ov-del]');
+    if(!btn) return;
+    const id = btn.getAttribute('data-ov-del');
+    delete overrides[id];
+    btnResetAll && (btnResetAll.disabled = Object.keys(overrides).length === 0);
+    renderOverrideList();
+    rebuild();
+  });
+
+  function fillFrom(payload){
+    const last = payload?.last || null;
+    const ids = payload?.ids || [];
+
+    renderOverrideList();
+
+    if(!last){
+      info.textContent = ids.length ? `선택됨: ${ids.length}개 (Shift 클릭으로 추가/해제)` : '3D에서 부재를 클릭하면 여기서 해당 부재만 프로파일을 변경할 수 있습니다. (Shift 클릭: 멀티 선택)';
       disableAll();
       selShape.innerHTML='';
       selSize.innerHTML='';
@@ -645,7 +722,10 @@ function initSelectionUI(){
       return;
     }
 
-    const stdKey = els.stdAll()?.value || userData.stdKey || 'KS';
+    // open panel on selection
+    setCollapsed(false);
+
+    const stdKey = els.stdAll()?.value || last.stdKey || 'KS';
     const shapes = data?.[stdKey]?.shapes || {};
     const shapeKeys = Object.keys(shapes);
 
@@ -656,8 +736,8 @@ function initSelectionUI(){
       selShape.appendChild(opt);
     });
 
-    const currentOv = overrides[userData.id];
-    selShape.value = currentOv?.shapeKey || userData.shapeKey || (shapeKeys.includes('H')?'H':(shapeKeys[0]||''));
+    const currentOv = overrides[last.id];
+    selShape.value = currentOv?.shapeKey || last.shapeKey || (shapeKeys.includes('H')?'H':(shapeKeys[0]||''));
 
     function fillSizes(){
       const items = shapes?.[selShape.value]?.items || [];
@@ -668,25 +748,31 @@ function initSelectionUI(){
         opt.textContent = `${it.name}${(it.kgm!=null && Number.isFinite(it.kgm)) ? ` · ${it.kgm} kg/m` : ''}`;
         selSize.appendChild(opt);
       });
-      selSize.value = currentOv?.sizeKey || userData.sizeKey || (items[0]?.key || '');
+      selSize.value = currentOv?.sizeKey || last.sizeKey || (items[0]?.key || '');
     }
 
     fillSizes();
     enableAll();
 
-    info.textContent = `선택됨: ${userData.role.toUpperCase()} · ${userData.id}`;
+    info.textContent = `선택됨: ${last.role.toUpperCase()} · ${last.id} (총 ${ids.length}개 선택)`;
 
     selShape.onchange = ()=>{ fillSizes(); };
 
     btnApply.onclick = ()=>{
-      overrides[userData.id] = { shapeKey: selShape.value, sizeKey: selSize.value };
+      for(const id of ids){
+        overrides[id] = { shapeKey: selShape.value, sizeKey: selSize.value };
+      }
       if(btnResetAll) btnResetAll.disabled = Object.keys(overrides).length === 0;
+      renderOverrideList();
       rebuild();
     };
 
     btnClear.onclick = ()=>{
-      delete overrides[userData.id];
+      for(const id of ids){
+        delete overrides[id];
+      }
       if(btnResetAll) btnResetAll.disabled = Object.keys(overrides).length === 0;
+      renderOverrideList();
       rebuild();
     };
   }
@@ -698,13 +784,14 @@ function initSelectionUI(){
   btnResetAll && (btnResetAll.onclick = ()=>{
     for(const k of Object.keys(overrides)) delete overrides[k];
     if(btnResetAll) btnResetAll.disabled = true;
-    fillFrom(state.selectedMesh?.userData || null);
+    // keep current selection
+    window.dispatchEvent(new CustomEvent('civilarchi:draft:selected', { detail: { last: state.selectedMesh?.userData || null, ids: [...state.selectedIds] } }));
     rebuild();
   });
 
   // initial state
   if(btnResetAll) btnResetAll.disabled = true;
-  fillFrom(null);
+  fillFrom({ last: null, ids: [] });
 }
 
 function wire() {
