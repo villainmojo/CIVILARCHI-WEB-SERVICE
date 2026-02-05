@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
+  <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205" />
+</head>
+<body>
+  <header class="top">
+    <div class="container">
+      <div class="brand">
+        <div class="logo">CA</div>
+        <div>
+          <div class="name">CIVILARCHI</div>
+          <div class="sub">토목·건축 엔지니어용 웹 서비스 (static)</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/">메인</a>
+        <a href="/blog/">블로그</a>
+        <a class="active" href="/civilarchi/">CIVILARCHI</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1>토목·건축 엔지니어용 웹페이지</h1>
+      <p class="muted">
+        이 페이지는 <code>/civilarchi/</code> 경로로 독립 배포됩니다. (DB 없음)
+      </p>
+      <div class="cards">
+        <article class="card">
+          <h2>프로젝트 목표</h2>
+          <ul>
+            <li>현장/사무에서 바로 쓰는 작은 계산·체크 도구</li>
+            <li>표준/기준/참고 링크 정리</li>
+            <li>업데이트는 항상 Git 기록 + 배포 스냅샷 남기기</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h2>상태</h2>
+          <p>
+            <span id="status">로딩 중…</span>
+          </p>
+          <p class="muted small">
+            build: <span id="build"></span>
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>다음 작업</h2>
+      <ol>
+        <li>필수 메뉴/섹션 구성 확정</li>
+        <li>첫 번째 도구 1개 추가 (예: 단위 변환 / 철근 중량 / 토공량 메모 등)</li>
+        <li>배포 자동 로그 확인</li>
+      </ol>
+    </section>
+
+    <footer class="footer">
+      <div class="muted small">© SENGVIS · CIVILARCHI</div>
+    </footer>
+  </main>
+
+  <script src="/civilarchi/assets/app.js?v=20260205"></script>
+</body>
+</html>
