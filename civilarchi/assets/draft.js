@@ -1194,8 +1194,11 @@ function rebuild() {
   if(d.subEnabled && d.subCountPerBay > 0){
     const prof = d.profileSub;
     const dim = (prof.shapeKey === 'H') ? parseH(prof.name) : null;
-    const b = mmToM(dim?.B ?? 120);
-    const dd = mmToM(dim?.H ?? 200);
+    const cdim = (prof.shapeKey === 'C') ? parseC(prof.name) : null;
+    const ldim = (prof.shapeKey === 'L') ? parseL(prof.name) : null;
+    const tdim = (prof.shapeKey === 'T') ? parseT(prof.name) : null;
+    const b = mmToM((dim?.B ?? cdim?.B ?? tdim?.B) ?? 120);
+    const dd = mmToM((dim?.H ?? cdim?.H ?? tdim?.H) ?? 200);
 
     for(const z of d.levelsMm){
       if(runSubAlongX){
@@ -1211,7 +1214,13 @@ function rebuild() {
               const id = `SBX_${z}_${bayY}_${k}_${ix}`;
               const geom = (dim && prof.shapeKey==='H')
                 ? makeHGeomForBeamX(len || 0.001, dim)
-                : new THREE.BoxGeometry(len || 0.001, dd, b);
+                : (cdim && prof.shapeKey==='C')
+                  ? makeCGeomForBeamX(len || 0.001, cdim)
+                  : (ldim && prof.shapeKey==='L')
+                    ? makeLGeomForBeamX(len || 0.001, ldim)
+                    : (tdim && prof.shapeKey==='T')
+                      ? makeTGeomForBeamX(len || 0.001, tdim)
+                      : new THREE.BoxGeometry(len || 0.001, dd, b);
               const mesh = new THREE.Mesh(geom, state.roleMats.sub);
               mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name, p0:{x:x0, y, z}, p1:{x:x1, y, z} };
               mesh.position.copy(toV((x0+x1)/2, y, z - (dim?.H ?? 200)/2));
@@ -1232,7 +1241,13 @@ function rebuild() {
               const id = `SBY_${z}_${bayX}_${k}_${iy}`;
               const geom = (dim && prof.shapeKey==='H')
                 ? makeHGeomForBeamY(len || 0.001, dim)
-                : new THREE.BoxGeometry(b, dd, len || 0.001);
+                : (cdim && prof.shapeKey==='C')
+                  ? makeCGeomForBeamY(len || 0.001, cdim)
+                  : (ldim && prof.shapeKey==='L')
+                    ? makeLGeomForBeamY(len || 0.001, ldim)
+                    : (tdim && prof.shapeKey==='T')
+                      ? makeTGeomForBeamY(len || 0.001, tdim)
+                      : new THREE.BoxGeometry(b, dd, len || 0.001);
               const mesh = new THREE.Mesh(geom, state.roleMats.sub);
               mesh.userData = { id, role: 'sub', stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name, p0:{x, y:y0, z}, p1:{x, y:y1, z} };
               mesh.position.copy(toV(x, (y0+y1)/2, z - (dim?.H ?? 200)/2));
