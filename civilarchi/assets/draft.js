@@ -64,7 +64,6 @@ const els = {
   braceShape: () => document.getElementById('drBraceShape'),
   braceSize: () => document.getElementById('drBraceSize'),
   braceHint: () => document.getElementById('drBraceHint'),
-  braceList: () => document.getElementById('drBraceList'),
 
   copy: () => document.getElementById('drCopy'),
 
@@ -895,7 +894,9 @@ function rebuild() {
         const w = mmToM(x1-x0);
         const hface = mmToM(z1-z0);
         const geom = new THREE.PlaneGeometry(w||0.001, hface||0.001);
-        const mesh = new THREE.Mesh(geom, matFace.clone());
+        const m = matFace.clone();
+        m.side = THREE.DoubleSide;
+        const mesh = new THREE.Mesh(geom, m);
         // PlaneGeometry is XY (X span, Z span) and sits vertical with normal +Z (our grid-Y axis)
         mesh.position.copy(toV((x0+x1)/2, y, (z0+z1)/2));
 
@@ -919,7 +920,9 @@ function rebuild() {
         const w = mmToM(y1-y0);
         const hface = mmToM(z1-z0);
         const geom = new THREE.PlaneGeometry(w||0.001, hface||0.001);
-        const mesh = new THREE.Mesh(geom, matFace.clone());
+        const m = matFace.clone();
+        m.side = THREE.DoubleSide;
+        const mesh = new THREE.Mesh(geom, m);
         // rotate so plane spans Z (grid-Y) and Y (level)
         mesh.rotation.y = Math.PI/2;
         mesh.position.copy(toV(x, (y0+y1)/2, (z0+z1)/2));
@@ -929,6 +932,33 @@ function rebuild() {
         const p10 = { x, y: y1, z: z0 };
         const p01 = { x, y: y0, z: z1 };
         const p11 = { x, y: y1, z: z1 };
+        mesh.userData = { faceKey, corners: { a:p00, b:p11, c:p01, d:p10 } };
+        state.bracePlaneGroup.add(mesh);
+      }
+    }
+
+    // horizontal faces (grid cell at each level) - allows selecting faces at grid intersections
+    for(let ix=0; ix<d.nx-1; ix++){
+      const x0 = d.xPosMm[ix] || 0;
+      const x1 = d.xPosMm[ix+1] || 0;
+      for(let iy=0; iy<d.ny-1; iy++){
+        const y0 = d.yPosMm[iy] || 0;
+        const y1 = d.yPosMm[iy+1] || 0;
+        const w = mmToM(x1-x0);
+        const h = mmToM(y1-y0);
+        const geom = new THREE.PlaneGeometry(w||0.001, h||0.001);
+        const m = matFace.clone();
+        m.side = THREE.DoubleSide;
+        const mesh = new THREE.Mesh(geom, m);
+        // PlaneGeometry XY => map to XZ by rotateX(-90deg)
+        mesh.rotation.x = -Math.PI/2;
+        mesh.position.copy(toV((x0+x1)/2, (y0+y1)/2, z1));
+
+        const faceKey = `F_H_${ix}_${iy}_${z1}`;
+        const p00 = { x: x0, y: y0, z: z1 };
+        const p10 = { x: x1, y: y0, z: z1 };
+        const p01 = { x: x0, y: y1, z: z1 };
+        const p11 = { x: x1, y: y1, z: z1 };
         mesh.userData = { faceKey, corners: { a:p00, b:p11, c:p01, d:p10 } };
         state.bracePlaneGroup.add(mesh);
       }
@@ -1311,47 +1341,20 @@ function initBraceUI(){
   const panel = els.bracePanel();
   const exit = els.braceExit();
   const hint = els.braceHint();
-  const list = els.braceList();
 
-  function renderBraceList(){
-    if(!list) return;
-    list.innerHTML='';
-    if(braces.length===0){
-      const tr=document.createElement('tr');
-      tr.innerHTML = '<td colspan="6" class="muted">(브레이스 없음)</td>';
-      list.appendChild(tr);
-      return;
-    }
-    for(const br of braces){
-      const tr=document.createElement('tr');
-      tr.innerHTML = `
-        <td class="mono">${br.id}</td>
-        <td class="mono">${br.faceKey}</td>
-        <td class="mono">${br.kind}</td>
-        <td class="mono">${br.shapeKey}</td>
-        <td class="mono">${br.name || br.sizeKey}</td>
-        <td class="right"><button class="mini-btn" data-br-del="${br.id}">삭제</button></td>
-      `;
-      list.appendChild(tr);
-    }
+  function renderBraceCount(){
+    // keep hint updated with count (no big list UI)
+    if(!hint) return;
+    const n = braces.length;
+    hint.textContent = `면에 마우스를 올리면 강조됩니다. 면을 클릭하면 브레이스가 ${n?`추가/삭제됩니다. (현재 ${n}개)`: '생성됩니다.'}`;
   }
-
-  list?.addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-br-del]');
-    if(!btn) return;
-    const id = btn.getAttribute('data-br-del');
-    const idx = braces.findIndex(b=>b.id===id);
-    if(idx>=0) braces.splice(idx,1);
-    renderBraceList();
-    rebuild();
-  });
 
   function setMode(on){
     state.braceMode = !!on;
     if(panel) panel.hidden = !state.braceMode;
     if(state.bracePlaneGroup) state.bracePlaneGroup.visible = state.braceMode;
-    if(hint) hint.textContent = state.braceMode ? '면에 마우스를 올리면 강조됩니다. 면을 클릭하면 브레이스가 생성됩니다.' : '';
-    if(state.braceMode) renderBraceList();
+    if(state.braceMode) renderBraceCount();
+    else if(hint) hint.textContent = '';
   }
 
   btn && (btn.onclick = ()=>{
@@ -1370,7 +1373,7 @@ function initBraceUI(){
       if(braces[i].faceKey === face.faceKey) braces.splice(i,1);
     }
     if(braces.length !== before){
-      renderBraceList();
+      renderBraceCount();
       rebuild();
       return;
     }
@@ -1380,7 +1383,7 @@ function initBraceUI(){
     const id = `BR_${Date.now()}_${Math.random().toString(16).slice(2,6)}`;
     const b = { id, faceKey: face.faceKey, kind: state.braceType, stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name || prof.sizeKey, kgm: prof.kgm ?? null, ...face.corners };
     braces.push(b);
-    renderBraceList();
+    renderBraceCount();
     rebuild();
   });
 

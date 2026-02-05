@@ -276,7 +276,8 @@ label.inline input{width:auto}
   border: 1px dashed rgba(31,42,68,0.22);
   border-radius: 14px;
   background: rgba(255,255,255,0.92);
-  max-height: 260px;
+  width: 280px;
+  max-height: 180px;
   overflow: auto;
 }
 
