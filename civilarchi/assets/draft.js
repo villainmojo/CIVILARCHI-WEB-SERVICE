@@ -64,6 +64,7 @@ const els = {
   braceShape: () => document.getElementById('drBraceShape'),
   braceSize: () => document.getElementById('drBraceSize'),
   braceHint: () => document.getElementById('drBraceHint'),
+  braceList: () => document.getElementById('drBraceList'),
 
   copy: () => document.getElementById('drCopy'),
 
@@ -306,6 +307,31 @@ function ensureThree() {
 
   state.raycaster = new THREE.Raycaster();
   state.pointer = new THREE.Vector2();
+
+  // Brace face hover highlight
+  let lastFace = null;
+  function setFaceHover(faceMesh){
+    if(lastFace && lastFace.material){
+      lastFace.material.opacity = 0.0;
+      lastFace.material.needsUpdate = true;
+    }
+    lastFace = faceMesh;
+    if(lastFace && lastFace.material){
+      lastFace.material.opacity = 0.14;
+      lastFace.material.needsUpdate = true;
+    }
+  }
+  state.renderer.domElement.addEventListener('pointermove', (ev)=>{
+    if(!state.braceMode) return;
+    const rect = state.renderer.domElement.getBoundingClientRect();
+    const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+    state.pointer.set(x,y);
+    state.raycaster.setFromCamera(state.pointer, state.camera);
+    const hits = state.raycaster.intersectObjects(state.bracePlaneGroup.children, false);
+    const hit = hits[0]?.object || null;
+    setFaceHover(hit);
+  });
 
   function syncSelectionMaterials(){
     for(const mesh of state.memberGroup.children){
@@ -804,7 +830,9 @@ function rebuild() {
   // materials (gray + selected)
   if(!state.matGray) state.matGray = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.88, metalness: 0.05 });
   if(!state.matSelected) state.matSelected = new THREE.MeshStandardMaterial({ color: 0x3A6EA5, roughness: 0.75, metalness: 0.10, emissive: 0x0b2a4a, emissiveIntensity: 0.25 });
-  const matFace = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.08, depthWrite: false });
+  const matFace = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.0, depthWrite: false });
+  // Only show faces in brace mode
+  if(state.bracePlaneGroup) state.bracePlaneGroup.visible = !!state.braceMode;
 
   const colBase = effectiveProfile(d.profileCol, null);
   const beamBase = effectiveProfile(d.profileBeam, null);
@@ -1096,16 +1124,29 @@ function rebuild() {
 
   // braces render
   const braceMat = new THREE.MeshStandardMaterial({ color: 0x666a73, roughness: 0.78, metalness: 0.08 });
+  function braceGeomAlongX(len, prof){
+    const hdim = (prof.shapeKey==='H') ? parseH(prof.name) : null;
+    const cdim = (prof.shapeKey==='C') ? parseC(prof.name) : null;
+    const ldim = (prof.shapeKey==='L') ? parseL(prof.name) : null;
+    const tdim = (prof.shapeKey==='T') ? parseT(prof.name) : null;
+
+    if(hdim) return makeHGeomForBeamX(len||0.001, hdim);
+    if(cdim) return makeCGeomForBeamX(len||0.001, cdim);
+    if(ldim) return makeLGeomForBeamX(len||0.001, ldim);
+    if(tdim) return makeTGeomForBeamX(len||0.001, tdim);
+
+    const t = mmToM(10);
+    return new THREE.BoxGeometry(len||0.001, t, t);
+  }
+
   function addBraceMember(p0, p1, prof){
     const dx = p1.x - p0.x;
     const dy = p1.y - p0.y;
     const dz = p1.z - p0.z;
     const lenMm = Math.sqrt(dx*dx + dy*dy + dz*dz);
     const len = mmToM(lenMm);
-    // thickness from profile (rough)
-    const dimH = (prof.shapeKey==='H') ? parseH(prof.name) : (prof.shapeKey==='C') ? parseC(prof.name) : null;
-    const t = mmToM(dimH?.tw ?? dimH?.tf ?? 8);
-    const geom = new THREE.BoxGeometry(len||0.001, t*2, t*2);
+
+    const geom = braceGeomAlongX(len, prof);
     const mesh = new THREE.Mesh(geom, braceMat);
     // position mid
     mesh.position.copy(toV((p0.x+p1.x)/2, (p0.y+p1.y)/2, (p0.z+p1.z)/2));
@@ -1275,11 +1316,47 @@ function initBraceUI(){
   const panel = els.bracePanel();
   const exit = els.braceExit();
   const hint = els.braceHint();
+  const list = els.braceList();
+
+  function renderBraceList(){
+    if(!list) return;
+    list.innerHTML='';
+    if(braces.length===0){
+      const tr=document.createElement('tr');
+      tr.innerHTML = '<td colspan="6" class="muted">(브레이스 없음)</td>';
+      list.appendChild(tr);
+      return;
+    }
+    for(const br of braces){
+      const tr=document.createElement('tr');
+      tr.innerHTML = `
+        <td class="mono">${br.id}</td>
+        <td class="mono">${br.faceKey}</td>
+        <td class="mono">${br.kind}</td>
+        <td class="mono">${br.shapeKey}</td>
+        <td class="mono">${br.name || br.sizeKey}</td>
+        <td class="right"><button class="mini-btn" data-br-del="${br.id}">삭제</button></td>
+      `;
+      list.appendChild(tr);
+    }
+  }
+
+  list?.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-br-del]');
+    if(!btn) return;
+    const id = btn.getAttribute('data-br-del');
+    const idx = braces.findIndex(b=>b.id===id);
+    if(idx>=0) braces.splice(idx,1);
+    renderBraceList();
+    rebuild();
+  });
 
   function setMode(on){
     state.braceMode = !!on;
     if(panel) panel.hidden = !state.braceMode;
-    if(hint) hint.textContent = state.braceMode ? '면을 클릭하면 브레이스가 생성됩니다. (X 또는 ㅅ 선택)' : '';
+    if(state.bracePlaneGroup) state.bracePlaneGroup.visible = state.braceMode;
+    if(hint) hint.textContent = state.braceMode ? '면에 마우스를 올리면 강조됩니다. 면을 클릭하면 브레이스가 생성됩니다.' : '';
+    if(state.braceMode) renderBraceList();
   }
 
   btn && (btn.onclick = ()=>{
@@ -1297,9 +1374,10 @@ function initBraceUI(){
     const key = `${face.faceKey}|${state.braceType}|${prof.stdKey}|${prof.shapeKey}|${prof.sizeKey}`;
     if(braces.some(b=>`${b.faceKey}|${b.kind}|${b.stdKey}|${b.shapeKey}|${b.sizeKey}`===key)) return;
 
-    const id = `BR_${braces.length+1}`;
+    const id = `BR_${Date.now()}_${Math.random().toString(16).slice(2,6)}`;
     const b = { id, faceKey: face.faceKey, kind: state.braceType, stdKey: prof.stdKey, shapeKey: prof.shapeKey, sizeKey: prof.sizeKey, name: prof.name || prof.sizeKey, kgm: prof.kgm ?? null, ...face.corners };
     braces.push(b);
+    renderBraceList();
     rebuild();
   });
 

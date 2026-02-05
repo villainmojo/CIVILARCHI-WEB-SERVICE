@@ -275,7 +275,9 @@ label.inline input{width:auto}
   padding: 10px;
   border: 1px dashed rgba(31,42,68,0.22);
   border-radius: 14px;
-  background: rgba(255,255,255,0.88);
+  background: rgba(255,255,255,0.92);
+  max-height: 420px;
+  overflow: auto;
 }
 
 .draft-ov.collapsed{padding:0; width:auto; background: transparent; border:none; box-shadow:none}

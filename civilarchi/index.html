@@ -6,7 +6,7 @@
   <title>CIVILARCHI · 토목·건축 엔지니어 웹</title>
   <meta name="description" content="CIVILARCHI: 토목·건축 엔지니어를 위한 간단한 웹 도구/노트." />
   <link rel="icon" href="/favicon.svg" />
-  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0420" />
+  <link rel="stylesheet" href="/civilarchi/assets/style.css?v=20260205_0433" />
 </head>
 <body>
   <header class="top">
@@ -256,7 +256,7 @@
                       <button class="mini-btn" id="drBraceExit">모드 종료</button>
                     </div>
                   </div>
-                  <div class="muted small" id="drBraceHint">면을 클릭하면 브레이스가 생성됩니다.</div>
+                  <div class="muted small" id="drBraceHint">면에 마우스를 올리면 강조됩니다. 면을 클릭하면 브레이스가 생성됩니다.</div>
                   <div class="form" style="margin-top:8px">
                     <label><span>형식</span>
                       <select id="drBraceType">
@@ -266,6 +266,23 @@
                     </label>
                     <label><span>부재종류</span><select id="drBraceShape"></select></label>
                     <label><span>프로파일</span><select id="drBraceSize"></select></label>
+                  </div>
+
+                  <div class="sb-title" style="margin-top:10px">브레이스 목록</div>
+                  <div class="sum-table-wrap">
+                    <table class="sum-table" style="min-width: 520px">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>면</th>
+                          <th>형식</th>
+                          <th>부재종류</th>
+                          <th>프로파일</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="drBraceList"></tbody>
+                    </table>
                   </div>
                 </div>
 
@@ -435,7 +452,7 @@
   </main>
 
   <script src="/civilarchi/assets/steel_data.js?v=20260205_0210"></script>
-  <script src="/civilarchi/assets/app.js?v=20260205_0420"></script>
-  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0420"></script>
+  <script src="/civilarchi/assets/app.js?v=20260205_0433"></script>
+  <script type="module" data-civilarchi-draft="1" src="/civilarchi/assets/draft.js?v=20260205_0433"></script>
 </body>
 </html>
