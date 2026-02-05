@@ -18,3 +18,4 @@ Columns:
 - 2026-02-05T02:23:01Z | a444cfa | deploy-20260205T022301Z | /root/clawd-dev/backups/civilarchi/deploy-20260205T022301Z_a444cfa.tgz
 - 2026-02-05T02:25:24Z | 3670866 | deploy-20260205T022524Z | /root/clawd-dev/backups/civilarchi/deploy-20260205T022524Z_3670866.tgz
 - 2026-02-05T02:45:46Z | b839b88 | deploy-20260205T024546Z | /root/clawd-dev/backups/civilarchi/deploy-20260205T024546Z_b839b88.tgz
+- 2026-02-05T02:51:05Z | 01d5e40 | deploy-20260205T025105Z | /root/clawd-dev/backups/civilarchi/deploy-20260205T025105Z_01d5e40.tgz
